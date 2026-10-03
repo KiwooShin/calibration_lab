@@ -115,6 +115,16 @@ Generated data and screenshots go in `artifacts/` and are ignored by Git.
 
 ## Checks
 
+To record a 22-second MP4/GIF walkthrough from a served static build:
+
+```bash
+xvfb-run -a python scripts/record_preview.py --url http://localhost:8000/
+```
+
+Requires Playwright, Chromium, ffmpeg, and (on Linux) Xvfb. Output is saved in
+`artifacts/preview/`. The film uses real app states and accepted optimizer
+iterates with adjusted playback timing, and labels the observations synthetic.
+
 For the static site, serve an export and run:
 
 ```bash
