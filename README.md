@@ -1,104 +1,104 @@
-# Head-camera FK Calibration Lab
+# Head-camera self-calibration
 
-The primary workflow calibrates **both seven-joint arms from labeled 3D arm and hand landmarks predicted by a head-camera perception model**. Positions, uncertainties, visibility, and synchronized encoder readings feed a robust kinematic fit. Camera-to-torso calibration is assumed known. No full hand-pose estimate is required.
+A focused experiment: **use labeled 3D arm and hand positions from a head-mounted camera to calibrate forward kinematics**.
 
-The dashboard includes an orbitable two-arm robot with a head camera, camera-frame landmark overlays, actual optimizer playback, recovered parameters, and comparisons between observing palm centers, hand landmarks, and arm-plus-hand landmarks. The original five experiments remain as supporting modules.
+The robot has two descriptions of each landmark: its perceived camera-frame position and the position predicted from joint encoders by the kinematic model. This app makes the discrepancy visible, fits shared parameters, and checks observations excluded from fitting.
 
-Perception outputs are synthetic in the interactive demo; a trained detector is not bundled. The calibration solver accepts real 3D predictions through a documented JSON interface. The arm geometry is generic, not a model of 1X NEO.
+The previous collection of mini-projects has been replaced. There is one workflow: **Observe → Compare → Calibrate → Validate**.
 
-![Head-camera self-observation](results/screenshots/00-self-observation.png)
+![The Compare stage: perceived landmarks, FK predictions, and their discrepancies](docs/preview.png)
 
-## Run
+## Run on a Mac
 
-Python 3.11 or later is required. From this directory:
+Python 3.11 or newer is required.
 
 ```bash
+git clone https://github.com/KiwooShin/calibration_lab.git
+cd calibration_lab
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
-python run_experiments.py
 python server.py
 ```
 
-Open **http://127.0.0.1:8765**. The server binds to loopback only. Use `python server.py --port 8766` to select another port. If results are missing, the server generates them at startup.
+Open **http://localhost:8765**. If you already cloned the repository, use `git pull --ff-only` first. Stop an older server with Ctrl+C before starting the replacement. Use `python server.py --port 8766` if the port is occupied.
 
-No npm install or frontend build is needed. Three.js 0.180.0 and OrbitControls are vendored locally, with their MIT license in `web/vendor/THREE-LICENSE.txt`. The dashboard makes no external runtime requests. A WebGL-capable browser is required for the 3D scene; numerical plots still work if WebGL is unavailable.
+The browser assets are bundled; no npm build or external frontend service is needed. The server binds to loopback only. A WebGL-capable browser displays the 3D robot; the camera projection and numerical controls remain usable without WebGL.
 
-## Primary workflow: observe your own arms
-
-The home screen is **See your own arms** (`#selfvision`).
-
-1. Select arm-and-hand landmarks, hand landmarks, or palm centers as the input.
-2. Set observation count, lateral/depth noise, missing detections, and outliers.
-3. Click **Calibrate from perception** to fit 14 encoder offsets and four link-length corrections.
-4. Replay accepted fit iterations. Independently scrub camera observation frames to compare perceived points with FK projections.
-5. Inspect held-out position error, recovered parameters, and local parameter rank. Hide the simulation-truth arms to focus on predictions and perception points.
-
-The default synthetic experiment reduces held-out landmark RMS from **30.112 mm to 0.642 mm**, with **0.671 mm palm-center RMS**. It uses 40 camera frames, 2 mm lateral / 4 mm depth noise before confidence scaling, 15% random dropout, and 4% outliers. The same-frame comparisons give 1.587 mm using palm centers, 0.827 mm using hand landmarks, and 0.642 mm using arm-plus-hand landmarks; these use different numbers of points and are not an equal-measurement-budget benchmark.
-
-- [Perception input schema, frame conventions, and landmark definitions](PERCEPTION_INPUT.md)
-- [Synthetic example input](results/perception_example.json) and [fitted model](results/landmark_fit.json)
-- [Primary report (PDF)](results/self-observation.pdf) / [PNG](results/self-observation.png)
-
-To fit perception predictions directly:
+To view the server running on `spark-ddbc` from a Mac connected to Tailscale:
 
 ```bash
-python self_observation.py --input predictions.json --output results/landmark_fit.json
+ssh -N -L 8765:127.0.0.1:8765 kiwoos@100.127.140.45
 ```
 
-Adapt the generic kinematic chain and landmark attachments to your robot first. The solver supports a known camera transform per frame, including head motion. The dashboard currently demonstrates a fixed head camera.
+Leave that terminal open and visit the same localhost URL. Choose either local execution or the tunnel; they cannot both bind the same local port.
 
-## Supporting experiments
+## What the visualization explains
 
-1. **Fix the ghost arm.** Adjust training count, observation noise, and pose coverage, then click **Run calibration**. The local Python endpoint performs a new nonlinear least-squares fit. Replay its accepted iterates, compare injected and estimated offsets, and switch to the held-out workspace error map. Its color scale stays fixed during playback.
-2. **Hold the hand.** Play a fixed-full-pose self-motion. Switch between the uncalibrated planner and a newly planned trajectory using fitted offsets. Inspect the magnified XZ drift trace, position drift over time, and equal-budget dataset comparison.
-3. **Choose the next pose.** Watch greedy information-based selection from a shared candidate pool. Inspect marginal information scores, selected configurations, and actual held-out error at six measurement budgets. The random baseline includes ten selections and an interquartile band.
-4. **See the invisible.** Switch point-only/full-pose measurements and narrow/broad joint excitation. Change the model along its weakest sensitivity direction. Point measurements cannot recover terminal-frame orientation; full pose improves rank, while narrow excitation remains poorly conditioned.
-5. **Geometry or flex?** Sweep payload from 0 to 3 kg. Compare a rigid model with a model that includes elbow compliance. Select 1× for physical geometry, or use labeled displacement exaggeration. The plots always report physical errors, including a 2 kg payload excluded from training.
+1. **Observe:** green points are the perceived 3D landmarks. Choose an observation to change the recorded arm configuration and known head-camera transform. Missing detections are omitted.
+2. **Compare:** orange geometry and crosses are nominal FK predictions. Pink segments connect corresponding predictions and measurements. The residual inspector magnifies one discrepancy in the camera XY plane and separately reports depth error.
+3. **Calibrate:** the solver fits a shared model using training observations. Replay actual accepted optimizer iterations. Changing the model iteration leaves the recorded joint readings, perception positions, and camera transforms fixed.
+4. **Validate:** only held-out frames are available on the observation slider. Compare iteration 0 with the final iteration. These observations never enter the fitting objective.
 
-Each module is an independent, seeded experiment. Changing one module does not silently change the others. **Export data** saves the current module's numerical evidence, including live refits. **PNG** exports the current 3D view. The sidebar report link opens the primary head-camera calibration report.
+The observation-frame and model-iteration sliders are independent. The initial demo is fitted when the server starts; selecting Calibrate from Compare runs the solver again. Directly selecting the Calibrate stage replays the current result.
 
-Drag to orbit, scroll to zoom, and use **Reset view** to restore the camera. Animations start only when requested. Sliders can be used with keyboard arrows.
+The camera panel projects 3D positions into an image plane. It is **not a real RGB image**, and this repository does not include a trained perception model. The synthetic source emulates the assumed perception interface. Import your actual 3D predictions after adapting the generic geometry and landmark definitions to your robot.
 
-## Supporting-module measured results
+## Calibration model
 
-These are deterministic synthetic results, not hardware benchmarks. Position metrics below are RMS on 160 unseen configurations unless labeled otherwise.
+- Two generic seven-revolute-joint arms; these are not NEO geometry.
+- Unknowns: 14 encoder zero offsets and four upper/forearm link-length corrections.
+- Measurements: labeled 3D landmark positions, per-axis uncertainty, synchronized joint readings, and known camera-to-torso transforms for each frame.
+- A known moving-head transform is supported. The demo includes gentle head yaw.
+- No measured hand orientation enters the fit.
+- Residuals compare predicted and observed positions in the camera frame, whitened by their per-axis standard deviations. A soft-L1 loss reduces the influence of outliers.
+- Camera calibration, shoulder transforms, and landmark attachments are fixed inputs. The solver does not jointly estimate those quantities.
+- Raw parameter sensitivities report local rank and conditioning. Rank deficiency or fitting bounds are shown as diagnostic messages, not silently treated as a successful identification of every parameter.
 
-| Experiment | Measured result |
-| --- | --- |
-| Ghost arm, 32 diverse observations, 0.5 mm positional noise | 27.992 → 0.153 mm; fitted orientation RMS 0.037° |
-| Fixed-hand self-motion | Maximum physical hand drift 33.017 → 0.193 mm after replanning with the calibrated model |
-| Information selection, 32 observations | 0.201 mm versus random-selection median 0.407 mm |
-| Point-only observability, 10 parameters | Rank 7: three terminal-frame orientation directions are invisible |
-| Full-pose observability | Rank 10; condition number 17.1 with broad excitation versus 9900.8 with narrow excitation |
-| Unseen 2 kg payload | Unloaded rigid model 4.158 mm; mixed-load rigid model 3.965 mm; compliance model 0.096 mm |
-| Recovered compliance | 0.0025049 rad/Nm versus injected 0.0025 rad/Nm |
+The generic chain has local joint axes Z, Y, X, Y, X, Y, Z. Its right arm is the reflected physical geometry with a proper palm-frame rotation. Known off-axis upper/forearm features and rigid hand reference points provide positional constraints. Changing these definitions changes what is identifiable.
 
-See [all result data](results/data.json), the [PNG report](results/overview.png), the [PDF report](results/overview.pdf), and [browser screenshots](results/screenshots/).
+## Default synthetic result
 
-## Model and experimental choices
+The seed-52 demo has 48 synchronized frames, split into 36 training and 12 validation frames. It includes 2 mm lateral / 4 mm depth noise before per-point uncertainty scaling, 15% random missing detections, and 4% outliers.
 
-- The chain has seven revolute joints with local axes Z, Y, X, Y, X, Y, Z. Each rotation is followed by its fixed local link translation. Internal units are meters and radians. The palm pose uses column-vector transforms.
-- FK is deterministic for all seven measured joint angles. Redundancy appears when solving for joint motion given a hand pose.
-- Calibration residuals combine position differences with the SO(3) logarithm of the relative orientation. Whitened residual scales are 1 mm and 0.15°. Encoder offsets are bounded to ±0.2 rad. The calibration starts at zero offsets.
-- Noise is independent Gaussian translation and small rotation-vector noise. A 1 mm control setting corresponds to 0.15° per rotational component. Held-out evaluation uses noise-free synthetic truth to measure model error separately from observation noise.
-- The null-space controller uses the geometric motion Jacobian, SVD continuation, and a full-pose correction after each finite step. It stops at a joint limit, near a singularity, or on correction failure. It does not implement collision avoidance.
-- Experimental design and observability use the **parameter** Jacobian, which is distinct from the motion Jacobian. Greedy selection uses noise whitening, a 3° parameter prior, and a log-determinant information criterion. Its scores are calculated at the fixed nominal model. Random trials vary selections while sharing the same noisy candidate observations.
-- The observability experiment adds three terminal-frame rotations to the seven offsets. It uses a relative rank threshold of 10⁻⁷. Full rank is local and does not guarantee a stable finite-noise estimate. Finite perturbation playback recomputes nonlinear FK, so second-order effects are retained.
-- The compliance model is an explicit small-deflection approximation: payload gravity torque is evaluated at the unloaded pose, and only joint 4 deflects by `compliance × torque`. It does not solve elastic equilibrium or model link masses, backlash, hysteresis, transmission, or actuator dynamics. The mixed-load rigid and compliant fits use the same 96 observations; the unloaded rigid fit uses 32.
-- The arm and all datasets are educational kinematics. Broad configurations are not filtered for ground contact, self-collision, camera visibility, or real robot reachability constraints. Adapting the lab to hardware requires a real robot model, measurements, and an appropriate motion controller.
+| Metric | Nominal model | Calibrated model |
+| --- | ---: | ---: |
+| Held-out observation RMS | 30.464 mm | 9.481 mm |
+| Held-out observation median | 28.213 mm | 4.792 mm |
+| Synthetic geometry RMS at held-out configurations | 29.356 mm | 0.563 mm |
 
-## Validation
+The remaining observation error includes perception noise and outliers. It is different from geometric error against exact synthetic truth. Imported data never displays simulation-only accuracy claims. These numbers are educational simulation results, not hardware benchmarks.
+
+## Import and export
+
+Use **Import observations** to upload the documented JSON dataset and run the same calibration pipeline. Training and validation splits are explicit in the input. The interface has no dependence on hidden synthetic ground truth.
+
+See [the input schema and landmark definitions](docs/observations.md), also summarized in the app's **Input format & model assumptions** link.
+
+```bash
+# Write a complete sample input dataset.
+python -m calibration --example artifacts/observations.json
+
+# Fit the supplied dataset, with no simulation truth.
+python -m calibration --input artifacts/observations.json --output artifacts/fit.json
+
+# Run the reproducible synthetic experiment from the command line.
+python -m calibration --output artifacts/demo.json
+```
+
+**Export model** downloads fitted joint offsets in radians and link-length corrections in meters, plus validation metrics and diagnostics. Displayed optimizer parameters use degrees and millimeters for readability. The downloadable model is always the completed fit, independent of the playback position.
+
+Generated data and screenshots go in `artifacts/` and are ignored by Git.
+
+## Checks
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
 ```
 
-The environment setting isolates these tests from unrelated installed plugins.
-It is needed on this machine because the shell exposes ROS pytest plugins from
-a different Python environment; those plugins otherwise fail before collection.
+The environment variable isolates the suite from unrelated globally installed pytest plugins. Tests cover camera transforms/projection, position-only recovery with head motion, strict training/validation separation, robust fitting, imported-data semantics, landmark kinematic dependencies, malformed inputs, and rank-deficient data.
 
-Fourteen numerical tests cover the original kinematics plus camera-frame transformations and projection, recovery of both arm chains from position-only observations, known head motion, robust fitting with outliers/dropout, invalid observations, and causal dependence of arm landmarks on upstream joints.
-
-For browser checks, keep `python server.py` running in another terminal:
+Optional browser checks, with the server running in another terminal:
 
 ```bash
 python -m pip install playwright
@@ -106,33 +106,31 @@ python -m playwright install chromium
 python tests/browser_smoke.py
 ```
 
-On this ARM64 Linux machine, headless Chromium cannot create WebGL even with SwiftShader. The full Chromium browser under a virtual display works:
+This ARM64 Linux host needs a full browser under a virtual display for WebGL:
 
 ```bash
 xvfb-run -a python tests/browser_smoke.py --headed
 ```
 
-The smoke check covers the primary head-camera workflow and five supporting modules, fresh zero-noise fits through both UI/API paths, camera frame and optimizer controls, JSON/PNG downloads, WebGL initialization, mobile overflow, and invalid API requests. It saves screenshots under `results/screenshots/`.
+The browser suite exercises all four stages, both fitting endpoints, fixed observations during optimizer playback, validation-only frame selection, real-data import, model export, settings, WebGL, and mobile overflow. Screenshots are saved in `artifacts/screenshots/`.
+
+## Boundaries
+
+The simulator models field of view and random dropout, not accurate self-occlusion. It does not enforce collision avoidance or simulate actuator dynamics. Hand reference points are rigid, not articulated fingertips. Robust fitting limits isolated outliers but cannot eliminate systematic perception bias. The solver assumes synchronized observations and does not estimate time delay.
+
+For hardware, replace the generic chain and landmark attachments with the robot's nominal model, use independently predicted perception landmarks, and collect suitable training and held-out data. A keypoint that moves along a silhouette with viewpoint is not a fixed physical landmark.
 
 ## Files
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `model.py` | FK, motion and parameter Jacobians, measurement model, calibration, and payload torque |
-| `self_observation.py` | Two-arm landmarks, head-camera transforms, robust position-only calibration, and real-data CLI |
-| `PERCEPTION_INPUT.md` | Perception dataset schema, uncertainty and landmark correspondence contract |
-| `experiments.py` | Five sequential, seeded experiments |
-| `run_experiments.py` | Rebuild saved data and standalone scientific plots |
-| `server.py` | Local static server and bounded live-calibration endpoint |
-| `web/app.js` | Experiment controls and data-driven visualizations |
-| `web/selfvision.js` | Primary workflow, camera projection overlay, and recovered parameter table |
-| `web/scene.js` | Orbitable Three.js arm, points, frames, and error vectors |
-| `web/charts.js` | SVG charts generated from numerical results |
-| `tests/` | Numerical checks and optional browser smoke check |
+| `calibration/geometry.py` | Two-arm FK, camera transforms, projection, model export |
+| `calibration/dataset.py` | Observation validation and synthetic perception source |
+| `calibration/solver.py` | Robust fit and held-out evaluation |
+| `calibration/__main__.py` | Dataset generation and calibration CLI |
+| `server.py` | Loopback-only server and calibration endpoints |
+| `web/` | Single-workflow interface, 3D view, camera overlay, residual plots |
+| `tests/` | Numerical and browser checks |
+| `plan.md` | Fresh-start scope and completion status |
 
-## References
-
-- [Modern Robotics: Jacobians, singularities, and redundancy](https://modernrobotics.northwestern.edu/nu-gm-book-resource/5-3-singularities/)
-- [Stepanova et al.: robot calibration with self-observation and complementary constraints](https://arxiv.org/abs/2012.07548)
-
-The project scope and completion record are in [plan.md](plan.md).
+Three.js 0.180.0 and OrbitControls are vendored under their MIT license in `web/vendor/LICENSE.txt`.

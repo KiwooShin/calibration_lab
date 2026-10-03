@@ -1,186 +1,95 @@
 import * as THREE from 'three';
 import {OrbitControls} from './vendor/OrbitControls.js';
 
-const vec = a => new THREE.Vector3(...a);
-const C = {truth: 0x6de6c5, estimate: 0xffc180};
+const vector=p=>new THREE.Vector3(...p);
+const connections=[[0,1],[1,2],[2,3],[3,4],[4,5],[4,6],[4,7]];
 
-export class ArmScene {
-  constructor(host) {
-    this.host = host;
-    this.renderer = new THREE.WebGLRenderer({antialias: true, alpha: true, preserveDrawingBuffer: true});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.25;
+export class RobotView {
+  constructor(host){
+    this.host=host;
+    this.renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
+    this.renderer.shadowMap.enabled=true;
+    this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    this.renderer.outputColorSpace=THREE.SRGBColorSpace;
+    this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure=1.15;
+    Object.assign(this.renderer.domElement.style,{position:'absolute',inset:'0',width:'100%',height:'100%'});
     host.prepend(this.renderer.domElement);
-    this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x111b29, .12);
-    this.camera = new THREE.PerspectiveCamera(37, 1, .01, 30);
-    this.camera.up.set(0, 0, 1);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.minDistance = .65;
-    this.controls.maxDistance = 6;
-    this.controls.maxPolarAngle = Math.PI * .87;
+    this.scene=new THREE.Scene();
+    this.scene.fog=new THREE.FogExp2(0x152131,.10);
+    this.camera=new THREE.PerspectiveCamera(39,1,.01,30);this.camera.up.set(0,0,1);
+    this.controls=new OrbitControls(this.camera,this.renderer.domElement);
+    this.controls.enableDamping=true;this.controls.minDistance=.8;this.controls.maxDistance=5;
     this.reset();
-    this.scene.add(new THREE.HemisphereLight(0xd2e8ff, 0x243343, 2.0));
-    const sun = new THREE.DirectionalLight(0xe3f7ff, 3.5);
-    sun.position.set(2, -3, 5); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -2; sun.shadow.camera.right = 2;
-    sun.shadow.camera.top = 2; sun.shadow.camera.bottom = -2;
-    sun.shadow.bias = -.0003; this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x63d7c3, 2);
-    fill.position.set(-2, 2, 1); this.scene.add(fill);
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(1.6, 100), new THREE.MeshStandardMaterial({color: 0x172231, roughness: .9, metalness: .15, transparent: true, opacity: .8}));
-    floor.receiveShadow = true; floor.position.z = -.003; this.scene.add(floor);
-    const grid = new THREE.GridHelper(3.2, 32, 0x40556d, 0x253950);
-    grid.rotation.x = Math.PI / 2; grid.material.transparent = true; grid.material.opacity = .35; this.scene.add(grid);
-    for (const radius of [.4, .8, 1.2]) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(radius-.001, radius+.001, 120), new THREE.MeshBasicMaterial({color: 0x40556d, transparent: true, opacity: .45, side: THREE.DoubleSide}));
-      ring.position.z = .001; this.scene.add(ring);
-    }
-    const standMat = new THREE.MeshStandardMaterial({color: 0x283b50, metalness: .65, roughness: .36});
-    this.stand = new THREE.Group();this.scene.add(this.stand);
-    this.cylinder([0, 0, 0], [0, 0, .07], .14, standMat, this.stand);
-    this.cylinder([0, 0, .06], [0, 0, .37], .052, standMat, this.stand);
-    this.scene.add(new THREE.AxesHelper(.23));
-    this.arms = {truth: this.makeArm(C.truth, false), estimate: this.makeArm(C.estimate, true)};
-    this.rightArms = {truth: this.makeArm(C.truth, false), estimate: this.makeArm(C.estimate, true)};
-    Object.values(this.rightArms).forEach(a=>a.group.visible=false);
-    this.robot = new THREE.Group();this.scene.add(this.robot);this.robot.visible=false;
-    const torsoMat = new THREE.MeshStandardMaterial({color:0x34485f,metalness:.55,roughness:.35});
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(.21,.40,.57),torsoMat);
-    torso.position.set(-.08,0,.74);torso.castShadow=true;this.robot.add(torso);
-    this.cylinder([-.08,0,.08],[-.08,0,.48],.10,torsoMat,this.robot);
-    this.cylinder([-.08,0,1.],[-.08,0,1.27],.055,torsoMat,this.robot);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(.20,.24,.19),torsoMat);
-    head.position.set(-.07,0,1.39);head.castShadow=true;this.robot.add(head);
-    const cameraBody=new THREE.Mesh(new THREE.BoxGeometry(.045,.12,.042),new THREE.MeshStandardMaterial({color:0x9ae8df,emissive:0x205a56,emissiveIntensity:.3}));
-    cameraBody.position.set(.044,0,1.43);this.robot.add(cameraBody);
-    const origin=new THREE.Vector3(.04,0,1.43);
-    const z=new THREE.Vector3(1,0,-1).normalize(),x=new THREE.Vector3(0,-1,0),y=new THREE.Vector3().crossVectors(z,x);
-    const corners=[[-.64,-.4],[.64,-.4],[.64,.4],[-.64,.4]].map(([u,v])=>origin.clone().addScaledVector(z,.63).addScaledVector(x,u).addScaledVector(y,v));
-    const rays=[];corners.forEach((c,i)=>{rays.push(origin,c,c,corners[(i+1)%4]);});
-    const frustum=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(rays),new THREE.LineBasicMaterial({color:0x7bcce0,transparent:true,opacity:.25}));
-    this.robot.add(frustum);
-    this.cloud = null;
-    this.path = null;
-    this.errorLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([vec([0,0,0]),vec([0,0,0])]), new THREE.LineBasicMaterial({color: 0xfca5bd, depthTest: false}));
-    this.errorLine.renderOrder = 10; this.scene.add(this.errorLine);
-    this.observer = new ResizeObserver(() => this.resize()); this.observer.observe(host); this.resize();
+    this.scene.add(new THREE.HemisphereLight(0xd6ecff,0x253542,2.3));
+    const key=new THREE.DirectionalLight(0xe2f8f1,3.1);key.position.set(1,-3,4);key.castShadow=true;
+    key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-2;key.shadow.camera.right=2;key.shadow.camera.top=2;key.shadow.camera.bottom=-2;key.shadow.bias=-.0005;this.scene.add(key);
+    const fill=new THREE.DirectionalLight(0x7bb5e2,1.3);fill.position.set(-2,2,2);this.scene.add(fill);
+    const floor=new THREE.Mesh(new THREE.CircleGeometry(1.5,80),new THREE.MeshStandardMaterial({color:0x152737,metalness:.15,roughness:.8}));
+    floor.position.z=-.002;floor.receiveShadow=true;this.scene.add(floor);
+    const grid=new THREE.GridHelper(3,30,0x45627b,0x2b445b);grid.rotation.x=Math.PI/2;grid.material.transparent=true;grid.material.opacity=.35;this.scene.add(grid);
+    const body=new THREE.MeshStandardMaterial({color:0x34485c,metalness:.5,roughness:.35});
+    this.box([.20,.39,.57],[-.07,0,.73],body);
+    this.tube([-.07,0,.05],[-.07,0,.45],.085,body,this.scene);
+    this.tube([-.07,0,1.0],[-.07,0,1.30],.048,body,this.scene);
+    this.head=new THREE.Group();this.scene.add(this.head);
+    const headBox=new THREE.Mesh(new THREE.BoxGeometry(.23,.17,.19),body);headBox.position.z=-.10;headBox.castShadow=true;this.head.add(headBox);
+    const lens=new THREE.Mesh(new THREE.BoxGeometry(.105,.038,.014),new THREE.MeshStandardMaterial({color:0x9fdae4,emissive:0x284f64,emissiveIntensity:.4}));this.head.add(lens);
+    this.frustum=this.lineObject(0x80bddf,.28);
+    this.arms=[this.arm(),this.arm()];
+    this.perceived=this.lineObject(0x70e1bd,.8);
+    this.residuals=this.lineObject(0xff91aa,.9);
+    this.dots=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({color:0x70e1bd,size:.021,sizeAttenuation:true,depthTest:false}));this.dots.renderOrder=3;this.scene.add(this.dots);
+    this.highlight=new THREE.Mesh(new THREE.SphereGeometry(.015,16,12),new THREE.MeshBasicMaterial({color:0xe5fff3,wireframe:true,depthTest:false}));this.highlight.renderOrder=4;this.scene.add(this.highlight);
+    const axes=new THREE.AxesHelper(.18);axes.position.set(-.1,-.1,.002);this.scene.add(axes);
+    this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(host);this.resize();
     this.animate();
   }
-
-  cylinder(a, b, radius, material, group) {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.04, 1, 20), material);
-    mesh.castShadow = !material.transparent;
-    group.add(mesh); this.positionLink(mesh, a, b); return mesh;
-  }
-  positionLink(mesh, a, b) {
-    const start = vec(a), end = vec(b), d = end.clone().sub(start);
-    mesh.position.copy(start.add(end).multiplyScalar(.5));
-    mesh.scale.y = Math.max(d.length(), 1e-6);
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d.normalize());
-  }
-  makeArm(color, ghost) {
-    const group = new THREE.Group(); this.scene.add(group);
-    const material = new THREE.MeshStandardMaterial({color, metalness: ghost ? .1 : .55, roughness: .32, transparent: ghost, opacity: ghost ? .26 : 1, depthWrite: !ghost});
-    const jointMaterial = new THREE.MeshStandardMaterial({color: ghost ? color : 0xc7e1dd, metalness: .7, roughness: .3, transparent: ghost, opacity: ghost ? .4 : 1, depthWrite: !ghost});
-    const links = [], joints = [];
-    for (let i=0;i<7;i++) {
-      links.push(this.cylinder([0,0,0], [0,0,1], ghost ? .029 : .019, material, group));
-      const joint = new THREE.Mesh(new THREE.SphereGeometry(ghost ? .033 : .027, 20, 14), jointMaterial);
-      joint.castShadow = !ghost; group.add(joint); joints.push(joint);
+  box(size,position,material){const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.position.set(...position);m.castShadow=true;this.scene.add(m);return m;}
+  tube(a,b,radius,material,group){const m=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,1,16),material);m.castShadow=true;group.add(m);this.positionTube(m,a,b);return m;}
+  positionTube(m,a,b){const av=vector(a),bv=vector(b),d=bv.clone().sub(av);m.position.copy(av.add(bv).multiplyScalar(.5));m.scale.y=Math.max(d.length(),1e-6);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());}
+  arm(){
+    const group=new THREE.Group();this.scene.add(group);
+    const material=new THREE.MeshStandardMaterial({color:0xffbd79,metalness:.4,roughness:.38,transparent:true,opacity:.72});
+    const joints=[],links=[];
+    for(let i=0;i<7;i++){
+      links.push(this.tube([0,0,0],[0,0,1],.018,material,group));
+      const sphere=new THREE.Mesh(new THREE.SphereGeometry(.025,16,12),material);group.add(sphere);joints.push(sphere);
     }
-    const hand = new THREE.Group();
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(.078, .085, .025), material);
-    palm.position.x = .026; palm.castShadow = !ghost; hand.add(palm);
-    for (let j=0;j<3;j++) {
-      const finger = new THREE.Mesh(new THREE.BoxGeometry(.042,.018,.017), material);
-      finger.position.set(.081,(j-1)*.027,0); hand.add(finger);
-    }
-    const thumb = new THREE.Mesh(new THREE.BoxGeometry(.04,.018,.019), material);
-    thumb.position.set(.035,-.061,0); thumb.rotation.z = -.6; hand.add(thumb);
-    const axes = new THREE.AxesHelper(ghost ? .16 : .11);
-    axes.material.depthTest = false; axes.renderOrder = 12; hand.add(axes); group.add(hand);
-    return {group, links, joints, hand};
+    const hand=new THREE.Group();group.add(hand);
+    const palm=new THREE.Mesh(new THREE.BoxGeometry(.07,.075,.022),material);palm.position.x=.027;hand.add(palm);
+    for(let i=0;i<3;i++){const finger=new THREE.Mesh(new THREE.BoxGeometry(.035,.015,.015),material);finger.position.set(.075,(i-1)*.026,0);hand.add(finger);}
+    return {group,links,joints,hand};
   }
-  updateArm(arm, state) {
-    if (!state) {arm.group.visible = false; return;}
-    arm.group.visible = true;
-    for (let j=0;j<7;j++) {
-      this.positionLink(arm.links[j], state.nodes[j], state.nodes[j+1]);
-      arm.joints[j].position.copy(vec(state.nodes[j]));
-    }
-    arm.hand.position.copy(vec(state.position));
-    const r = state.rotation;
-    const matrix = new THREE.Matrix4().set(r[0][0],r[0][1],r[0][2],0,r[1][0],r[1][1],r[1][2],0,r[2][0],r[2][1],r[2][2],0,0,0,0,1);
-    arm.hand.quaternion.setFromRotationMatrix(matrix);
-  }
-  update(frame, {hideArms=false, exaggeration=1, elastic=false}={}) {
-    const estimate = elastic ? frame.elastic : frame.estimate;
-    let truth = frame.truth;
-    if (exaggeration !== 1 && truth && estimate) {
-      truth = {...truth, nodes: truth.nodes.map((p,i)=>p.map((v,k)=>estimate.nodes[i][k]+exaggeration*(v-estimate.nodes[i][k]))), position: truth.position.map((v,k)=>estimate.position[k]+exaggeration*(v-estimate.position[k]))};
-    }
-    this.updateArm(this.arms.truth, hideArms ? null : truth);
-    this.updateArm(this.arms.estimate, hideArms ? null : estimate);
-    this.errorLine.visible = !hideArms && !!truth && !!estimate;
-    if (truth && estimate) {
-      this.errorLine.geometry.dispose();
-      this.errorLine.geometry = new THREE.BufferGeometry().setFromPoints([vec(truth.position),vec(estimate.position)]);
-    }
-  }
-  setMode(selfvision) {
-    const changed=this.selfvision!==selfvision;this.selfvision=selfvision;
-    this.robot.visible=selfvision;this.stand.visible=!selfvision;
-    Object.values(this.rightArms).forEach(a=>a.group.visible=false);
-    if(this.landmarkResiduals)this.landmarkResiduals.visible=false;
-    if(changed)this.reset();
-  }
-  updateSelfVision(sample, iteration, showTruth=true) {
-    const estimates=sample.iterations[iteration];
-    this.updateArm(this.arms.truth,showTruth?sample.truth[0]:null);
-    this.updateArm(this.arms.estimate,estimates[0]);
-    this.updateArm(this.rightArms.truth,showTruth?sample.truth[1]:null);
-    this.updateArm(this.rightArms.estimate,estimates[1]);
-    const points=[];
-    sample.observed_base.forEach((arm,side)=>arm.forEach((p,k)=>{if(sample.used[side][k])points.push(p);}));
-    this.setCloud(points);
-    // Separate residual segments; one LineSegments object avoids connecting observations.
-    if(!this.landmarkResiduals){this.landmarkResiduals=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xf594b0,transparent:true,opacity:.85}));this.scene.add(this.landmarkResiduals);}
-    const endpoints=[];
-    sample.observed_base.forEach((arm,side)=>arm.forEach((p,k)=>{if(sample.used[side][k])endpoints.push(vec(p),vec(estimates[side].landmarks[k]));}));
-    this.landmarkResiduals.geometry.dispose();this.landmarkResiduals.geometry=new THREE.BufferGeometry().setFromPoints(endpoints);this.landmarkResiduals.visible=true;
-    this.errorLine.visible=false;
-  }
-  setCloud(points, values=null, maxValue=null, selected=[]) {
-    if (this.cloud) {this.scene.remove(this.cloud); this.cloud.geometry.dispose(); this.cloud.material.dispose(); this.cloud=null;}
-    if (!points?.length) return;
-    const colors = [], chosen = new Set(selected);
-    const max = maxValue ?? Math.max(...(values || [1]), 1e-9);
-    const low = new THREE.Color(0x52d2b1), high = new THREE.Color(0xfb956d);
-    points.forEach((p,i)=>{
-      const color = chosen.has(i) ? new THREE.Color(0xf8f6c4) : low.clone().lerp(high, Math.max(0,Math.min(1,(values?.[i]??0)/max)));
-      colors.push(color.r,color.g,color.b);
+  lineObject(color,opacity){const line=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color,transparent:true,opacity}));this.scene.add(line);return line;}
+  replaceGeometry(object,points){object.geometry.dispose();object.geometry=new THREE.BufferGeometry().setFromPoints(points.map(vector));}
+  setRotation(object,r){const m=new THREE.Matrix4().set(r[0][0],r[0][1],r[0][2],0,r[1][0],r[1][1],r[1][2],0,r[2][0],r[2][1],r[2][2],0,0,0,0,1);object.quaternion.setFromRotationMatrix(m);}
+  update(sample,iteration,stage,selected,intrinsics){
+    const models=sample.snapshots[iteration];
+    models.forEach((model,side)=>{
+      const arm=this.arms[side];arm.group.visible=stage!==0;
+      model.nodes.slice(0,7).forEach((p,j)=>{this.positionTube(arm.links[j],p,model.nodes[j+1]);arm.joints[j].position.set(...p);});
+      arm.hand.position.set(...model.points[4]);this.setRotation(arm.hand,model.rotation);
     });
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position',new THREE.Float32BufferAttribute(points.flat(),3));
-    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-    this.cloud = new THREE.Points(geometry,new THREE.PointsMaterial({size:.014,vertexColors:true,transparent:true,opacity:.8,sizeAttenuation:true}));
-    this.scene.add(this.cloud);
+    const dots=[],bones=[],errors=[];
+    sample.observed_world.forEach((points,side)=>{
+      points.forEach((p,k)=>{if(sample.visible[side][k]){dots.push(p);errors.push(p,models[side].points[k]);}});
+      connections.forEach(([a,b])=>{if(sample.visible[side][a]&&sample.visible[side][b])bones.push(points[a],points[b]);});
+    });
+    this.replaceGeometry(this.dots,dots);this.replaceGeometry(this.perceived,bones);this.replaceGeometry(this.residuals,errors);this.residuals.visible=stage!==0;
+    this.perceived.material.opacity=stage===0?.8:.32;
+    this.highlight.visible=sample.visible[selected.side][selected.landmark];
+    if(this.highlight.visible)this.highlight.position.set(...sample.observed_world[selected.side][selected.landmark]);
+    const t=sample.T_base_camera,r=t.slice(0,3).map(row=>row.slice(0,3)),origin=t.slice(0,3).map(row=>row[3]);
+    this.head.position.set(...origin);this.setRotation(this.head,r);
+    const z=.62,k=intrinsics;
+    const corners=[[0,0],[k.width,0],[k.width,k.height],[0,k.height]].map(([u,v])=>{
+      const local=[(u-k.cx)/k.fx*z,(v-k.cy)/k.fy*z,z];return r.map((row,i)=>origin[i]+row.reduce((sum,x,j)=>sum+x*local[j],0));
+    });
+    const rays=[];corners.forEach((p,i)=>rays.push(origin,p,p,corners[(i+1)%4]));this.replaceGeometry(this.frustum,rays);
   }
-  setPath(points) {
-    if (this.path) {this.scene.remove(this.path);this.path.geometry.dispose();this.path.material.dispose();this.path=null;}
-    if (!points?.length) return;
-    this.path=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(vec)),new THREE.LineBasicMaterial({color:0xb0a4fa,transparent:true,opacity:.6}));
-    this.scene.add(this.path);
-  }
-  reset() {if(this.selfvision){this.camera.position.set(2.05,-2.2,1.9);this.controls.target.set(.25,0,.86);}else{this.camera.position.set(1.15,-1.65,1.15);this.controls.target.set(.24,0,.43);}this.controls.update();}
-  resize() {const w=this.host.clientWidth,h=this.host.clientHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
-  animate() {requestAnimationFrame(()=>this.animate());this.controls.update();this.renderer.render(this.scene,this.camera);}
-  snapshot() {this.renderer.render(this.scene,this.camera);const a=document.createElement('a');a.download='calibration-arm.png';a.href=this.renderer.domElement.toDataURL('image/png');a.click();}
+  reset(){this.camera.position.set(1.9,-2.2,1.82);this.controls.target.set(.25,0,.9);this.controls.update();}
+  resize(){const w=this.host.clientWidth,h=this.host.clientHeight;this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
+  animate(){requestAnimationFrame(()=>this.animate());this.controls.update();this.renderer.render(this.scene,this.camera);}
 }

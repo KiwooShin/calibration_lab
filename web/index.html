@@ -1,49 +1,39 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0c111b">
-  <title>Calibration Lab · Head-camera self-observation</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101722"><title>Self-calibration · From seeing to knowing</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 </head>
 <body>
-  <aside class="sidebar">
-    <a class="brand" href="./" aria-label="Calibration Lab home"><span class="brand-mark">⌘</span><span>calibration<span class="brand-sub">RESEARCH LAB / 01</span></span></a>
-    <div class="nav-caption">SELF-CALIBRATION <span>LAB</span></div>
-    <nav aria-label="Calibration experiments">
-      <button class="nav-item active" data-module="selfvision"><span class="nav-number">◎</span><span>See your own arms<small>Head-camera perception · primary</small></span><span class="nav-dot"></span></button>
-      <button class="nav-item" data-module="ghost"><span class="nav-number">01</span><span>Fix the ghost arm<small>Supporting · pose-based fit</small></span><span class="nav-dot"></span></button>
-      <button class="nav-item" data-module="redundancy"><span class="nav-number">02</span><span>Hold the hand<small>Seven-joint redundancy</small></span><span class="nav-dot"></span></button>
-      <button class="nav-item" data-module="active"><span class="nav-number">03</span><span>Choose the next pose<small>Experimental design</small></span><span class="nav-dot"></span></button>
-      <button class="nav-item" data-module="observability"><span class="nav-number">04</span><span>See the invisible<small>Parameter observability</small></span><span class="nav-dot"></span></button>
-      <button class="nav-item" data-module="compliance"><span class="nav-number">05</span><span>Geometry or flex?<small>Load-dependent errors</small></span><span class="nav-dot"></span></button>
-    </nav>
-    <div class="sidebar-note"><span class="live-dot"></span> SELF-OBSERVATION BENCH<br><p>See the landmarks.<br>Calibrate the chain.</p><div class="micro-rule"></div><span>Two arms · 7 joints each<br>Known head-camera transform<br>3D positions, not hand poses</span></div>
-    <a class="sidebar-link" href="../results/self-observation.pdf" target="_blank" rel="noopener">Open perception report <span>↗</span></a>
-  </aside>
+  <header class="topbar"><a class="brand" href="./"><span class="brand-icon">◈</span> calibration<span class="brand-light">/ self-observation</span></a><div class="top-actions"><span id="source" class="pill">SIMULATED PERCEPTION</span><button id="import-button" class="quiet">Import observations ↑</button><input id="file-input" type="file" accept=".json,application/json" hidden><button id="export-button" class="quiet">Export model ↓</button></div></header>
   <main>
-    <header class="topbar"><span>ROBOTICS <span class="slash">/</span> KINEMATIC CALIBRATION</span><span class="tag">LOCAL · REPRODUCIBLE</span></header>
-    <section class="intro"><div><div class="eyebrow" id="eyebrow">PRIMARY / HEAD-CAMERA SELF-OBSERVATION</div><h1 id="title">See your arms. Calibrate the model<span>.</span></h1><p id="subtitle">Perceived 3D arm and hand positions become constraints on forward kinematics.</p></div><button id="export-data" class="secondary">Export data <span>↓</span></button></section>
-    <div id="status" role="status" aria-live="polite">Loading numerical experiments…</div>
-    <section class="metrics" id="metrics" aria-label="Experiment results"></section>
-    <div class="workbench">
-      <section class="viewport-panel">
-        <div class="panel-heading"><span><span class="live-dot"></span> <span id="scene-title">ARM / MODEL ALIGNMENT</span></span><div class="scene-actions"><button id="reset-view" title="Reset camera">Reset view</button><button id="snapshot" title="Download the 3D view as PNG">PNG ↗</button></div></div>
-        <div id="viewport" aria-label="Interactive three-dimensional robot arm. Drag to orbit, scroll to zoom."><div class="view-label">WORLD FRAME <span>XYZ / METERS</span></div><div id="scene-badge" class="scene-badge">POSE OBSERVATION</div><div id="scene-detail"></div><div class="scene-legend"><span><i class="swatch cyan"></i><span id="truth-label">Physical arm</span></span><span><i class="swatch amber"></i><span id="estimate-label">Predicted arm</span></span></div><div class="orbit-hint">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div><div id="render-error" hidden></div></div>
-        <div class="transport"><button id="play" aria-label="Play experiment animation">▶</button><label for="timeline" id="timeline-label">ITERATION</label><input id="timeline" type="range" min="0" max="5" value="0" aria-label="Animation frame"><output id="frame-label">0 / 5</output></div>
-      </section>
-      <aside class="control-panel"><div class="panel-heading">EXPERIMENT CONTROLS <span class="small-cross">＋</span></div><div id="controls"></div><div class="frame-readout" id="frame-readout"></div></aside>
-    </div>
-    <section id="perception-panel" hidden>
-      <div class="perception-toolbar"><div><span class="eyebrow">THE PERCEPTION INTERFACE</span><h2>What the head camera tells the model</h2></div><label class="truth-toggle"><input id="show-truth" type="checkbox" checked> Show simulation truth in 3D</label></div>
-      <div class="perception-grid"><article class="chart-card"><div class="chart-heading"><h2>Camera-frame landmark overlay</h2><span>SYNTHETIC / POSITION ONLY</span></div><div id="camera-overlay"></div><div class="observation-selector"><label for="observation-frame">Observation frame</label><input type="range" id="observation-frame" min="0" max="39" value="0"><output id="observation-value">1 / 40</output></div><p class="chart-caption">Projection of noisy 3D predictions, not a real RGB image. Missing landmarks are omitted. Gray points are excluded from this fit.</p></article><article class="chart-card"><div class="chart-heading"><h2>Recovered kinematic parameters</h2><span>SIMULATION CHECK</span></div><div id="parameter-table"></div><p class="chart-caption">Ground truth is shown for evaluation only. The optimizer estimates encoder offsets and link lengths from camera-frame positions.</p></article></div>
+    <section class="intro"><div><div class="eyebrow">HEAD CAMERA → 3D LANDMARKS → FORWARD KINEMATICS</div><h1>Make the model match<br>what the robot sees<span>.</span></h1><p>Compare perceived arm and hand positions with the kinematic model.<br>Fit one shared set of parameters. Check it on observations the fit never used.</p></div><div class="question-card"><span>THE QUESTION</span><p>“My encoders say my wrist is here.<br>My camera sees it over there.<br><strong>Which model parameters are wrong?</strong>”</p><div><i class="dot green"></i> Camera observation <i class="dot amber"></i> FK prediction</div></div></section>
+    <nav class="pipeline" aria-label="Calibration pipeline">
+      <button data-stage="0" class="step active"><span class="step-number">01</span><span><b>Observe</b><small>What does the camera know?</small></span><span class="step-arrow">→</span></button>
+      <button data-stage="1" class="step"><span class="step-number">02</span><span><b>Compare</b><small>Where does the model disagree?</small></span><span class="step-arrow">→</span></button>
+      <button data-stage="2" class="step"><span class="step-number">03</span><span><b>Calibrate</b><small>Update the shared parameters</small></span><span class="step-arrow">→</span></button>
+      <button data-stage="3" class="step"><span class="step-number">04</span><span><b>Validate</b><small>Does it work on unseen frames?</small></span></button>
+    </nav>
+    <div id="status" role="status" aria-live="polite">Loading the calibration experiment…</div>
+    <section class="stage-explanation"><div><span id="stage-label" class="eyebrow">01 / OBSERVE</span><h2 id="stage-title">Start with positions, not a perfect hand pose.</h2><p id="stage-description"></p></div><button id="next-stage" class="primary">Compare with FK →</button></section>
+    <section class="metrics" id="metrics" aria-label="Current calibration measurements"></section>
+    <section class="view-grid">
+      <article class="panel robot-panel"><div class="panel-header"><h3>Robot & head camera</h3><div><span class="micro">TORSO FRAME / METERS</span><button id="reset-view" class="icon-button" title="Reset 3D view">↺</button></div></div><div id="robot-view"><div class="scene-overlay"><span id="scene-state">PERCEIVED LANDMARKS</span><small>Known camera-to-torso transform</small></div><div class="orbit-note">DRAG TO ORBIT · SCROLL TO ZOOM</div><div id="webgl-error" hidden></div></div><div class="panel-footer"><span><i class="dot green"></i> Perceived 3D positions</span><span id="fk-legend"><i class="dot amber"></i> FK model</span><span><i class="dot pink"></i> Discrepancy</span></div></article>
+      <article class="panel camera-panel"><div class="panel-header"><h3>What the head camera sees</h3><span id="projection-label" class="micro">SYNTHETIC PROJECTION</span></div><div id="camera-view"></div><div class="panel-footer"><span>● Perception</span><span class="amber-text">+ FK prediction</span><span id="camera-count"></span></div><p class="camera-disclaimer">A projection of 3D landmarks—not a real camera image. No image-inference model is running in this demo.</p></article>
     </section>
-    <section class="charts"><article class="chart-card"><div class="chart-heading"><h2 id="chart-one-title"></h2><span id="chart-one-unit"></span></div><div id="chart-one"></div><p class="chart-caption" id="chart-one-caption"></p></article><article class="chart-card"><div class="chart-heading"><h2 id="chart-two-title"></h2><span id="chart-two-unit"></span></div><div id="chart-two"></div><p class="chart-caption" id="chart-two-caption"></p></article></section>
-    <section class="insight"><span>THE TAKEAWAY</span><p id="takeaway"></p></section>
-    <details class="method"><summary>Inside the experiment <span>MODEL, ASSUMPTIONS & VALIDATION ＋</span></summary><div id="method"></div></details>
-    <footer><span>CALIBRATION LAB <b>©</b> EDUCATIONAL SIMULATION</span><span>Generic geometry. No claims about 1X NEO hardware.</span></footer>
+    <section class="scrubbers">
+      <div class="scrubber"><div class="scrubber-top"><label for="observation">Observation frame</label><span id="split-badge" class="pill">TRAIN</span><output id="observation-value"></output></div><input id="observation" type="range" min="0" max="47" value="1"><p>Changes the recorded arm configuration and known head-camera transform.</p></div>
+      <div class="scrubber"><div class="scrubber-top"><label for="iteration">Calibration iteration</label><button id="play" aria-label="Play actual optimizer iterations">▶ Play fit</button><output id="iteration-value"></output></div><input id="iteration" type="range" min="0" max="10" value="0"><p id="iteration-hint">Changes the FK model. Perceived positions and encoder readings stay fixed.</p></div>
+    </section>
+    <section class="evidence-grid">
+      <article class="panel inspector"><div class="panel-header"><h3>Inspect one disagreement</h3><span class="micro">CAMERA FRAME</span></div><div class="inspector-controls"><label for="arm-select">Arm</label><select id="arm-select"><option value="0">Left</option><option value="1">Right</option></select><label for="landmark-select">Landmark</label><select id="landmark-select"></select></div><div id="residual-inspector"></div><p class="panel-note">The magnified view measures FK − perception in millimeters. All three components matter; depth error may be hard to see in the image.</p></article>
+      <article class="panel"><div class="panel-header"><h3 id="chart-title">Check observations excluded from fitting</h3><span class="micro">POSITION RMS / MM</span></div><div class="chart-container" id="error-chart"></div><p class="panel-note" id="error-caption"></p></article>
+    </section>
+    <section class="fit-details"><article class="panel parameter-panel"><div class="panel-header"><h3>What changes during calibration?</h3><span class="micro">ONE MODEL / ALL FRAMES</span></div><div id="parameters"></div><p class="panel-note">Seven encoder offsets and two link-length corrections per arm. The joint readings, observations, and camera transforms are not optimized.</p></article><article class="panel explanation-panel"><div class="panel-header"><h3>What the fit is solving</h3><span class="micro">POSITIONS ONLY</span></div><div class="equation">FK landmark in camera frame<br><span>−</span> perceived landmark position<br><strong>= a 3D residual</strong></div><p>Use all visible training landmarks across many arm configurations. Scale errors by measurement uncertainty and use a robust loss to limit outliers.</p><p><b>Validation frames never enter the optimizer.</b> Agreement with noisy perception is different from exact physical accuracy.</p><div id="fit-diagnostics"></div></article></section>
+    <details id="data-settings" class="settings"><summary>Change the synthetic observations <span>NOISE · MISSING POINTS · OUTLIERS</span></summary><div class="settings-grid"><label>Recorded frames<select id="frame-count"><option>24</option><option selected>48</option><option>72</option><option>96</option></select></label><label>Lateral noise [mm]<input id="noise" type="number" min="0" max="8" step=".5" value="2"></label><label>Missing detections<select id="missing"><option value="0">0%</option><option value="0.15" selected>15%</option><option value="0.3">30%</option><option value="0.4">40%</option></select></label><label>Unflagged outliers<select id="outliers"><option value="0">0%</option><option value="0.04" selected>4%</option><option value="0.1">10%</option><option value="0.15">15%</option></select></label><button id="run-demo" class="primary">Generate & calibrate →</button></div><p>Depth noise is twice lateral noise, before per-point uncertainty scaling. Visibility uses field of view and random dropout, not a rendered occlusion model. Demo truth is used only for evaluation.</p></details>
+    <footer><span>Generic two-arm model · 7 joints per arm · known head-camera calibration</span><a href="guide.html">Input format & model assumptions ↗</a></footer>
   </main>
   <script type="module" src="app.js"></script>
 </body>

@@ -1,123 +1,90 @@
-"""Optional end-to-end check; start server.py first, then run this script.
-
-Requires `pip install playwright && python -m playwright install chromium`.
-"""
+"""Optional: server.py must be running. Use --headed under Xvfb on this ARM64 host."""
 from pathlib import Path
-import json
-import sys
+import json,sys
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'results' / 'screenshots'
-OUTPUT.mkdir(exist_ok=True)
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from calibration.dataset import simulate
 
 
-def check_browser():
+def main():
+    out=ROOT/'artifacts'/'screenshots';out.mkdir(parents=True,exist_ok=True)
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel='chromium', headless='--headed' not in sys.argv,
-                                    args=['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
-        page = browser.new_page(viewport={'width': 1440, 'height': 1100}, device_scale_factor=1)
-        errors = []
-        page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto('http://127.0.0.1:8765', wait_until='networkidle')
-        page.wait_for_function('window.calibrationLab && window.calibrationLab.hasWebGL')
-        assert page.locator('#viewport canvas').count() == 1
-        assert page.locator('.metric').count() == 4
-        assert page.evaluate('window.calibrationLab.module') == 'selfvision'
-        assert page.locator('#camera-overlay svg').count() == 1
-        assert '18 / 18' in page.locator('#metrics').inner_text()
-        page.locator('#observation-frame').fill('8')
-        page.locator('#observation-frame').fill('4')
-        page.locator('#timeline').fill(page.locator('#timeline').get_attribute('max'))
-        page.evaluate('window.scrollTo(0,0)')
-        page.wait_for_timeout(150)
-        page.screenshot(path=str(OUTPUT / '00-self-observation.png'), full_page=True)
-        page.locator('#vision-noise').fill('0')
-        page.locator('#vision-dropout').select_option('0')
-        page.locator('#vision-outliers').select_option('0')
-        page.locator('#run-perception').click()
-        page.wait_for_function('window.calibrationLab.data.selfvision.noise_mm === 0')
-        assert page.evaluate('window.calibrationLab.data.selfvision.final.landmark_mm') < 1e-5
-        page.locator('#timeline').fill('0')
-        page.locator('#show-truth').uncheck()
-        page.locator('#show-truth').check()
-        page.locator('[data-module="ghost"]').click()
-        assert page.locator('#chart-one svg').count() == 1
-        page.screenshot(path=str(OUTPUT / '01-ghost.png'), full_page=True)
+        browser=p.chromium.launch(channel='chromium',headless='--headed' not in sys.argv,
+                                  args=['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
+        page=browser.new_page(viewport={'width':1440,'height':1050},device_scale_factor=1)
+        errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+        page.goto('http://127.0.0.1:8765',wait_until='networkidle')
+        page.wait_for_function('window.calibrationApp && window.calibrationApp.hasWebGL')
+        assert page.locator('#iteration').is_disabled()
+        assert page.locator('#robot-view canvas').count()==1
+        assert page.locator('#camera-view svg').count()==1
+        assert page.evaluate('window.calibrationApp.stage')==0
+        page.screenshot(path=str(out/'01-observe.png'),full_page=True)
+        page.locator('#next-stage').click()
+        assert page.evaluate('window.calibrationApp.stage')==1
+        assert '3D' in page.locator('#residual-inspector').inner_text()
+        page.evaluate('window.scrollTo(0,0)');page.wait_for_timeout(100)
+        page.screenshot(path=str(out/'02-compare.png'),full_page=True)
 
-        # Run a new numerical fit through the actual control/API path.
-        page.locator('#noise').fill('0')
-        page.locator('#sample-count').fill('48')
-        page.locator('#run-calibration').click()
-        page.wait_for_function('window.calibrationLab.data.ghost.count === 48')
-        assert page.evaluate('window.calibrationLab.data.ghost.final.position_mm') < 1e-5
-        page.locator('#timeline').fill('0')  # Pause playback.
-        page.locator('#ghost-view').select_option('workspace')
-        assert 'ERROR MAP' in page.locator('#scene-badge').inner_text()
-        page.locator('#timeline').fill(page.locator('#timeline').get_attribute('max'))
-        with page.expect_download() as download:
-            page.locator('#export-data').click()
-        exported = download.value
-        payload = json.loads(Path(exported.path()).read_text())
-        assert payload['count'] == 48
-        with page.expect_download() as download:
-            page.locator('#snapshot').click()
-        assert Path(download.value.path()).read_bytes().startswith(b'\x89PNG')
+        # The Compare action really calls the solver endpoint.
+        with page.expect_response('**/api/demo') as response:
+            page.locator('#next-stage').click()
+        assert response.value.status==200
+        page.wait_for_function('window.calibrationApp.stage===2 && !window.calibrationApp.busy')
+        page.locator('#iteration').fill('0')
+        before=page.evaluate('JSON.stringify(window.calibrationApp.result.samples[window.calibrationApp.sampleIndex].observed_camera)')
+        page.locator('#iteration').fill(page.locator('#iteration').get_attribute('max'))
+        after=page.evaluate('JSON.stringify(window.calibrationApp.result.samples[window.calibrationApp.sampleIndex].observed_camera)')
+        assert before==after
+        assert page.locator('#error-chart svg').count()==1
+        page.locator('#observation').fill('4')
+        assert page.evaluate('window.calibrationApp.iteration')>0
+        page.evaluate('window.scrollTo(0,0)');page.wait_for_timeout(100)
+        page.screenshot(path=str(out/'03-calibrate.png'),full_page=True)
 
-        page.locator('[data-module="redundancy"]').click()
-        page.locator('#timeline').fill('65')
-        assert page.locator('#chart-two .comparison tbody tr').count() == 3
-        page.locator('#sweep-mode').select_option('after')
-        page.locator('#timeline').fill('70')
-        assert 'CALIBRATED PLANNER' in page.locator('#scene-badge').inner_text()
-        page.screenshot(path=str(OUTPUT / '02-redundancy.png'), full_page=True)
+        page.locator('[data-stage="3"]').click()
+        assert page.evaluate('window.calibrationApp.result.samples[window.calibrationApp.sampleIndex].split')=='validation'
+        page.locator('#observation').fill(page.locator('#observation').get_attribute('max'))
+        assert page.evaluate('window.calibrationApp.result.samples[window.calibrationApp.sampleIndex].split')=='validation'
+        page.evaluate('window.scrollTo(0,0)');page.wait_for_timeout(100)
+        page.screenshot(path=str(out/'04-validate.png'),full_page=True)
+        with page.expect_download() as download:page.locator('#export-button').click()
+        model=json.loads(Path(download.value.path()).read_text())
+        assert len(model['model']['left']['joint_offsets_rad'])==7
 
-        page.locator('[data-module="active"]').click()
-        page.locator('#budget').select_option('12')
-        assert page.evaluate('window.calibrationLab.index') == 11
-        page.locator('#point-view').select_option('selected')
-        page.locator('#point-view').select_option('gain')
-        page.screenshot(path=str(OUTPUT / '03-active-selection.png'), full_page=True)
+        # Real-data path: uploading a dataset must remove simulation-only claims.
+        dataset,_=simulate(count=24,noise_mm=0,missing=0,outliers=0)
+        with page.expect_response('**/api/calibrate') as response:
+            page.locator('#file-input').set_input_files({'name':'observations.json','mimeType':'application/json','buffer':json.dumps(dataset).encode()})
+        assert response.value.status==200
+        page.wait_for_function('window.calibrationApp.result.source==="imported" && !window.calibrationApp.busy')
+        page.locator('#iteration').fill(page.locator('#iteration').get_attribute('max'))
+        assert 'Simulation geometry' not in page.locator('#metrics').inner_text()
+        assert page.evaluate('window.calibrationApp.result.final.validation_rms_mm')<1e-5
+        page.locator('#landmark-select').select_option('7')
+        page.locator('#arm-select').select_option('1')
+        assert page.locator('#residual-inspector').inner_text()
 
-        page.locator('[data-module="observability"]').click()
-        assert '7 / 10' in page.locator('#metrics').inner_text()
-        page.locator('#timeline').fill('64')
-        assert '0.0000 mm' in page.locator('#frame-readout').inner_text()
-        page.screenshot(path=str(OUTPUT / '04-observability.png'), full_page=True)
-        page.locator('#measurement').select_option('pose')
-        assert '10 / 10' in page.locator('#metrics').inner_text()
-        page.locator('#obs-coverage').select_option('narrow')
-        assert '9900' in page.locator('#metrics').inner_text()
-
-        page.locator('[data-module="compliance"]').click()
-        page.locator('#prediction').select_option('elastic')
-        page.locator('#exaggeration').select_option('1')
-        page.locator('#payload').select_option('3')
-        assert '3.00 KG' in page.locator('#scene-badge').inner_text()
-        page.locator('#prediction').select_option('rigid')
-        page.locator('#exaggeration').select_option('5')
-        page.screenshot(path=str(OUTPUT / '05-compliance.png'), full_page=True)
-
-        # Controls remain usable on a narrow viewport, without page overflow.
-        page.set_viewport_size({'width': 390, 'height': 844})
-        page.locator('[data-module="ghost"]').click()
-        page.locator('#ghost-view').select_option('arm')
-        page.wait_for_timeout(200)
+        # Demo settings use the numerical endpoint, not a cosmetic update.
+        page.locator('#data-settings summary').click()
+        page.locator('#noise').fill('0');page.locator('#missing').select_option('0');page.locator('#outliers').select_option('0')
+        page.locator('#run-demo').click()
+        page.wait_for_function('window.calibrationApp.result.source==="synthetic" && window.calibrationApp.result.settings.noise_mm===0 && !window.calibrationApp.busy')
+        assert page.evaluate('window.calibrationApp.result.final.truth_rms_mm')<1e-5
+        page.locator('#iteration').fill('0')
+        page.set_viewport_size({'width':390,'height':844})
+        page.locator('[data-stage="1"]').click()
+        page.evaluate('window.scrollTo(0,0)');page.wait_for_timeout(150)
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        page.screenshot(path=str(OUTPUT / '06-mobile.png'), full_page=True)
-        page.locator('[data-module="selfvision"]').click()
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        page.evaluate('window.scrollTo(0,0)')
-        page.wait_for_timeout(150)
-        page.screenshot(path=str(OUTPUT / '07-self-observation-mobile.png'), full_page=True)
-        for body in [{'count': -1}, {'noise_mm': 100}, {'spread': 'invalid'}, []]:
-            assert page.request.post('http://127.0.0.1:8765/api/ghost', data=body).status == 400
-        for body in [{'count': 2}, {'group': 'unknown'}, {'dropout': .9}]:
-            assert page.request.post('http://127.0.0.1:8765/api/self-observation', data=body).status == 400
-        assert not errors, errors
+        page.screenshot(path=str(out/'05-mobile.png'),full_page=True)
+        assert page.request.post('http://127.0.0.1:8765/api/demo',data={'noise_mm':100}).status==400
+        assert page.request.post('http://127.0.0.1:8765/api/calibrate',data={}).status==400
+        assert page.request.get('http://127.0.0.1:8765/guide.html').status==200
+        assert not errors,errors
         browser.close()
-        print('Browser checks passed: primary head-camera workflow + five supporting modules, two live fits, exports, WebGL, mobile layout, API validation.')
+        print('Browser checks passed: four stages, fixed observations, held-out-only validation, both fit endpoints, import/export, mobile layout, WebGL.')
 
 
-if __name__ == '__main__':
-    check_browser()
+if __name__=='__main__':main()
