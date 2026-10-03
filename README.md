@@ -1,10 +1,12 @@
-# Seven-DOF Arm Calibration Lab
+# Head-camera FK Calibration Lab
 
-Five interactive experiments about calibrating forward kinematics from externally measured hand poses. Built as a local numerical research demo with an orbitable 3D arm, actual optimization playback, live calibration controls, and exported evidence.
+The primary workflow calibrates **both seven-joint arms from labeled 3D arm and hand landmarks predicted by a head-camera perception model**. Positions, uncertainties, visibility, and synchronized encoder readings feed a robust kinematic fit. Camera-to-torso calibration is assumed known. No full hand-pose estimate is required.
 
-The arm is generic, not a model of 1X NEO. Measurements are synthetic. Camera intrinsics, extrinsics, the base frame, and the measured palm frame are known, except for the explicitly varied terminal-frame orientation in experiment 4.
+The dashboard includes an orbitable two-arm robot with a head camera, camera-frame landmark overlays, actual optimizer playback, recovered parameters, and comparisons between observing palm centers, hand landmarks, and arm-plus-hand landmarks. The original five experiments remain as supporting modules.
 
-![Calibration lab](results/screenshots/01-ghost.png)
+Perception outputs are synthetic in the interactive demo; a trained detector is not bundled. The calibration solver accepts real 3D predictions through a documented JSON interface. The arm geometry is generic, not a model of 1X NEO.
+
+![Head-camera self-observation](results/screenshots/00-self-observation.png)
 
 ## Run
 
@@ -20,7 +22,31 @@ Open **http://127.0.0.1:8765**. The server binds to loopback only. Use `python s
 
 No npm install or frontend build is needed. Three.js 0.180.0 and OrbitControls are vendored locally, with their MIT license in `web/vendor/THREE-LICENSE.txt`. The dashboard makes no external runtime requests. A WebGL-capable browser is required for the 3D scene; numerical plots still work if WebGL is unavailable.
 
-## Explore the five projects
+## Primary workflow: observe your own arms
+
+The home screen is **See your own arms** (`#selfvision`).
+
+1. Select arm-and-hand landmarks, hand landmarks, or palm centers as the input.
+2. Set observation count, lateral/depth noise, missing detections, and outliers.
+3. Click **Calibrate from perception** to fit 14 encoder offsets and four link-length corrections.
+4. Replay accepted fit iterations. Independently scrub camera observation frames to compare perceived points with FK projections.
+5. Inspect held-out position error, recovered parameters, and local parameter rank. Hide the simulation-truth arms to focus on predictions and perception points.
+
+The default synthetic experiment reduces held-out landmark RMS from **30.112 mm to 0.642 mm**, with **0.671 mm palm-center RMS**. It uses 40 camera frames, 2 mm lateral / 4 mm depth noise before confidence scaling, 15% random dropout, and 4% outliers. The same-frame comparisons give 1.587 mm using palm centers, 0.827 mm using hand landmarks, and 0.642 mm using arm-plus-hand landmarks; these use different numbers of points and are not an equal-measurement-budget benchmark.
+
+- [Perception input schema, frame conventions, and landmark definitions](PERCEPTION_INPUT.md)
+- [Synthetic example input](results/perception_example.json) and [fitted model](results/landmark_fit.json)
+- [Primary report (PDF)](results/self-observation.pdf) / [PNG](results/self-observation.png)
+
+To fit perception predictions directly:
+
+```bash
+python self_observation.py --input predictions.json --output results/landmark_fit.json
+```
+
+Adapt the generic kinematic chain and landmark attachments to your robot first. The solver supports a known camera transform per frame, including head motion. The dashboard currently demonstrates a fixed head camera.
+
+## Supporting experiments
 
 1. **Fix the ghost arm.** Adjust training count, observation noise, and pose coverage, then click **Run calibration**. The local Python endpoint performs a new nonlinear least-squares fit. Replay its accepted iterates, compare injected and estimated offsets, and switch to the held-out workspace error map. Its color scale stays fixed during playback.
 2. **Hold the hand.** Play a fixed-full-pose self-motion. Switch between the uncalibrated planner and a newly planned trajectory using fitted offsets. Inspect the magnified XZ drift trace, position drift over time, and equal-budget dataset comparison.
@@ -28,11 +54,11 @@ No npm install or frontend build is needed. Three.js 0.180.0 and OrbitControls a
 4. **See the invisible.** Switch point-only/full-pose measurements and narrow/broad joint excitation. Change the model along its weakest sensitivity direction. Point measurements cannot recover terminal-frame orientation; full pose improves rank, while narrow excitation remains poorly conditioned.
 5. **Geometry or flex?** Sweep payload from 0 to 3 kg. Compare a rigid model with a model that includes elbow compliance. Select 1× for physical geometry, or use labeled displacement exaggeration. The plots always report physical errors, including a 2 kg payload excluded from training.
 
-Each module is an independent, seeded experiment. Changing the first module does not silently change the others. **Export data** saves the current module's numerical evidence, including any live ghost-arm refit. **PNG** exports the current 3D view. The report link opens the default five-experiment PDF.
+Each module is an independent, seeded experiment. Changing one module does not silently change the others. **Export data** saves the current module's numerical evidence, including live refits. **PNG** exports the current 3D view. The sidebar report link opens the primary head-camera calibration report.
 
 Drag to orbit, scroll to zoom, and use **Reset view** to restore the camera. Animations start only when requested. Sliders can be used with keyboard arrows.
 
-## Default measured results
+## Supporting-module measured results
 
 These are deterministic synthetic results, not hardware benchmarks. Position metrics below are RMS on 160 unseen configurations unless labeled otherwise.
 
@@ -70,7 +96,7 @@ The environment setting isolates these tests from unrelated installed plugins.
 It is needed on this machine because the shell exposes ROS pytest plugins from
 a different Python environment; those plugins otherwise fail before collection.
 
-The numerical tests verify rigid transforms, batched FK, the motion Jacobian against finite differences, noise-free encoder recovery, full-pose null-space invariance, positive information accumulation, exact point-only terminal-orientation ambiguity, gravity torque against the potential-energy gradient, and joint offset/compliance recovery.
+Fourteen numerical tests cover the original kinematics plus camera-frame transformations and projection, recovery of both arm chains from position-only observations, known head motion, robust fitting with outliers/dropout, invalid observations, and causal dependence of arm landmarks on upstream joints.
 
 For browser checks, keep `python server.py` running in another terminal:
 
@@ -86,17 +112,20 @@ On this ARM64 Linux machine, headless Chromium cannot create WebGL even with Swi
 xvfb-run -a python tests/browser_smoke.py --headed
 ```
 
-The smoke check covers all five modules, a fresh zero-noise fit through the UI/API, timeline and scenario controls, JSON/PNG downloads, WebGL initialization, mobile overflow, and invalid API requests. It saves screenshots under `results/screenshots/`. No JavaScript page errors were observed.
+The smoke check covers the primary head-camera workflow and five supporting modules, fresh zero-noise fits through both UI/API paths, camera frame and optimizer controls, JSON/PNG downloads, WebGL initialization, mobile overflow, and invalid API requests. It saves screenshots under `results/screenshots/`.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
 | `model.py` | FK, motion and parameter Jacobians, measurement model, calibration, and payload torque |
+| `self_observation.py` | Two-arm landmarks, head-camera transforms, robust position-only calibration, and real-data CLI |
+| `PERCEPTION_INPUT.md` | Perception dataset schema, uncertainty and landmark correspondence contract |
 | `experiments.py` | Five sequential, seeded experiments |
 | `run_experiments.py` | Rebuild saved data and standalone scientific plots |
 | `server.py` | Local static server and bounded live-calibration endpoint |
 | `web/app.js` | Experiment controls and data-driven visualizations |
+| `web/selfvision.js` | Primary workflow, camera projection overlay, and recovered parameter table |
 | `web/scene.js` | Orbitable Three.js arm, points, frames, and error vectors |
 | `web/charts.js` | SVG charts generated from numerical results |
 | `tests/` | Numerical checks and optional browser smoke check |

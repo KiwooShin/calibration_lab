@@ -1,6 +1,29 @@
-# Seven-DOF Arm Calibration Lab
+# Head-camera Forward-Kinematics Calibration Lab
 
-Build five small, interactive robotics projects in order, based on the hiring-manager question: given reliable externally measured hand poses, how do we calibrate a seven-joint arm and choose useful calibration motions?
+**Current priority:** use a head-mounted camera's perception model to predict labeled 3D arm and hand positions in camera coordinates, then calibrate forward kinematics from these observations and synchronized encoders. This supersedes the original emphasis on externally measured full hand poses. The user confirmed 3D positions in camera coordinates and known camera-to-torso calibration.
+
+## Primary project: head-camera self-observation
+
+**Input:** camera-frame 3D landmark positions, visibility, per-axis uncertainty, seven encoder readings per arm, and a known camera-to-torso transform for each frame. Hand orientation is not an input.
+
+**Fit:** fourteen joint offsets and four upper/forearm link-length corrections. Transform predicted landmarks into the camera frame, whiten position residuals, and fit a robust shared model across observations.
+
+**Visuals:** two-arm robot with head camera and viewing frustum, camera-view landmark overlays, residual vectors, optimizer playback independent of observation-frame playback, recovered parameters, and hand-only versus arm-and-hand comparisons.
+
+- [x] Position-only calibration backend and per-frame head-transform support.
+- [x] Known landmark attachments, confidence-derived uncertainty, visibility masks, and robust outlier handling.
+- [x] Default primary dashboard workflow with live refitting.
+- [x] Comparison of palm centers, hand landmarks, and full arm-and-hand observations on the same frames.
+- [x] Real perception/encoder input schema and a CLI that needs no synthetic truth.
+- [x] Held-out evaluation, dedicated report, numerical checks, and browser checks.
+
+The demo assumes the perception stage and simulates its outputs; it does not claim to run a trained image model. The real-data integration boundary is documented in [PERCEPTION_INPUT.md](PERCEPTION_INPUT.md). Ground-truth arms and parameters are used only for synthetic evaluation and optional visualization.
+
+**Measured default result:** 30.112 → 0.642 mm held-out 3D landmark RMS; 0.671 mm palm-center RMS; local rank 18/18. Uses 40 two-arm frames, 2 mm lateral / 4 mm depth noise before confidence scaling, 15% random missing detections, and 4% unflagged outliers. No real NEO measurements are involved.
+
+**Validation:** all 14 numerical tests pass, including known moving-head transforms and position-only recovery of joint offsets and link lengths. Browser checks cover the primary workflow, a new fit through its API, camera/iteration controls, mobile layout, and all five supporting modules. The example perception JSON was also fitted through the standalone CLI.
+
+The five original projects below remain supporting studies.
 
 ## Shared scope
 

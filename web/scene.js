@@ -43,10 +43,29 @@ export class ArmScene {
       ring.position.z = .001; this.scene.add(ring);
     }
     const standMat = new THREE.MeshStandardMaterial({color: 0x283b50, metalness: .65, roughness: .36});
-    this.cylinder([0, 0, 0], [0, 0, .07], .14, standMat, this.scene);
-    this.cylinder([0, 0, .06], [0, 0, .37], .052, standMat, this.scene);
+    this.stand = new THREE.Group();this.scene.add(this.stand);
+    this.cylinder([0, 0, 0], [0, 0, .07], .14, standMat, this.stand);
+    this.cylinder([0, 0, .06], [0, 0, .37], .052, standMat, this.stand);
     this.scene.add(new THREE.AxesHelper(.23));
     this.arms = {truth: this.makeArm(C.truth, false), estimate: this.makeArm(C.estimate, true)};
+    this.rightArms = {truth: this.makeArm(C.truth, false), estimate: this.makeArm(C.estimate, true)};
+    Object.values(this.rightArms).forEach(a=>a.group.visible=false);
+    this.robot = new THREE.Group();this.scene.add(this.robot);this.robot.visible=false;
+    const torsoMat = new THREE.MeshStandardMaterial({color:0x34485f,metalness:.55,roughness:.35});
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(.21,.40,.57),torsoMat);
+    torso.position.set(-.08,0,.74);torso.castShadow=true;this.robot.add(torso);
+    this.cylinder([-.08,0,.08],[-.08,0,.48],.10,torsoMat,this.robot);
+    this.cylinder([-.08,0,1.],[-.08,0,1.27],.055,torsoMat,this.robot);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(.20,.24,.19),torsoMat);
+    head.position.set(-.07,0,1.39);head.castShadow=true;this.robot.add(head);
+    const cameraBody=new THREE.Mesh(new THREE.BoxGeometry(.045,.12,.042),new THREE.MeshStandardMaterial({color:0x9ae8df,emissive:0x205a56,emissiveIntensity:.3}));
+    cameraBody.position.set(.044,0,1.43);this.robot.add(cameraBody);
+    const origin=new THREE.Vector3(.04,0,1.43);
+    const z=new THREE.Vector3(1,0,-1).normalize(),x=new THREE.Vector3(0,-1,0),y=new THREE.Vector3().crossVectors(z,x);
+    const corners=[[-.64,-.4],[.64,-.4],[.64,.4],[-.64,.4]].map(([u,v])=>origin.clone().addScaledVector(z,.63).addScaledVector(x,u).addScaledVector(y,v));
+    const rays=[];corners.forEach((c,i)=>{rays.push(origin,c,c,corners[(i+1)%4]);});
+    const frustum=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(rays),new THREE.LineBasicMaterial({color:0x7bcce0,transparent:true,opacity:.25}));
+    this.robot.add(frustum);
     this.cloud = null;
     this.path = null;
     this.errorLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([vec([0,0,0]),vec([0,0,0])]), new THREE.LineBasicMaterial({color: 0xfca5bd, depthTest: false}));
@@ -115,6 +134,29 @@ export class ArmScene {
       this.errorLine.geometry = new THREE.BufferGeometry().setFromPoints([vec(truth.position),vec(estimate.position)]);
     }
   }
+  setMode(selfvision) {
+    const changed=this.selfvision!==selfvision;this.selfvision=selfvision;
+    this.robot.visible=selfvision;this.stand.visible=!selfvision;
+    Object.values(this.rightArms).forEach(a=>a.group.visible=false);
+    if(this.landmarkResiduals)this.landmarkResiduals.visible=false;
+    if(changed)this.reset();
+  }
+  updateSelfVision(sample, iteration, showTruth=true) {
+    const estimates=sample.iterations[iteration];
+    this.updateArm(this.arms.truth,showTruth?sample.truth[0]:null);
+    this.updateArm(this.arms.estimate,estimates[0]);
+    this.updateArm(this.rightArms.truth,showTruth?sample.truth[1]:null);
+    this.updateArm(this.rightArms.estimate,estimates[1]);
+    const points=[];
+    sample.observed_base.forEach((arm,side)=>arm.forEach((p,k)=>{if(sample.used[side][k])points.push(p);}));
+    this.setCloud(points);
+    // Separate residual segments; one LineSegments object avoids connecting observations.
+    if(!this.landmarkResiduals){this.landmarkResiduals=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xf594b0,transparent:true,opacity:.85}));this.scene.add(this.landmarkResiduals);}
+    const endpoints=[];
+    sample.observed_base.forEach((arm,side)=>arm.forEach((p,k)=>{if(sample.used[side][k])endpoints.push(vec(p),vec(estimates[side].landmarks[k]));}));
+    this.landmarkResiduals.geometry.dispose();this.landmarkResiduals.geometry=new THREE.BufferGeometry().setFromPoints(endpoints);this.landmarkResiduals.visible=true;
+    this.errorLine.visible=false;
+  }
   setCloud(points, values=null, maxValue=null, selected=[]) {
     if (this.cloud) {this.scene.remove(this.cloud); this.cloud.geometry.dispose(); this.cloud.material.dispose(); this.cloud=null;}
     if (!points?.length) return;
@@ -137,7 +179,7 @@ export class ArmScene {
     this.path=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(vec)),new THREE.LineBasicMaterial({color:0xb0a4fa,transparent:true,opacity:.6}));
     this.scene.add(this.path);
   }
-  reset() {this.camera.position.set(1.15,-1.65,1.15);this.controls.target.set(.24,0,.43);this.controls.update();}
+  reset() {if(this.selfvision){this.camera.position.set(2.05,-2.2,1.9);this.controls.target.set(.25,0,.86);}else{this.camera.position.set(1.15,-1.65,1.15);this.controls.target.set(.24,0,.43);}this.controls.update();}
   resize() {const w=this.host.clientWidth,h=this.host.clientHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
   animate() {requestAnimationFrame(()=>this.animate());this.controls.update();this.renderer.render(this.scene,this.camera);}
   snapshot() {this.renderer.render(this.scene,this.camera);const a=document.createElement('a');a.download='calibration-arm.png';a.href=this.renderer.domElement.toDataURL('image/png');a.click();}

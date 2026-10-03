@@ -4,6 +4,7 @@ import json
 import time
 import numpy as np
 from experiments import ghost, redundancy, active_selection, observability, compliance
+from self_observation import self_observation
 
 ROOT = Path(__file__).resolve().parent
 
@@ -63,11 +64,56 @@ def export_plot(data):
     plt.close(fig)
 
 
+def export_self_observation(data):
+    import matplotlib.pyplot as plt
+    from self_observation import project, to_camera
+    d = data['selfvision']
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10), layout='constrained')
+    teal, amber, purple = '#5ce1cc', '#ffbf69', '#aaa4fa'
+    sample = d['samples'][4]
+    ax = axes[0, 0]
+    for side in range(2):
+        mask = np.array(sample['used'][side])
+        seen = np.array(sample['observed_uv'][side])[mask]
+        before = project(to_camera(np.array(sample['iterations'][0][side]['landmarks'])))[0][mask]
+        after = project(to_camera(np.array(sample['iterations'][-1][side]['landmarks'])))[0][mask]
+        ax.scatter(*seen.T, color=teal, s=30, label='Perception' if side == 0 else None)
+        ax.scatter(*before.T, color=amber, marker='+', s=45, label='Nominal FK' if side == 0 else None)
+        ax.scatter(*after.T, color=purple, marker='x', s=35, label='Calibrated FK' if side == 0 else None)
+    ax.set(xlim=(0, 960), ylim=(600, 0), title='Head-camera projection of 3D landmarks', xlabel='u [pixel]', ylabel='v [pixel]')
+    ax.legend()
+    ax = axes[0, 1]
+    for key, label, color in [('landmark_mm', 'All arm + hand landmarks', teal), ('palm_mm', 'Palm centers', amber)]:
+        ax.plot([f['metrics'][key] for f in d['frames']], 'o-', color=color, label=label)
+    ax.set(title='Generalization to 160 unseen configurations', xlabel='Accepted optimizer iteration', ylabel='Held-out 3D position RMS [mm]')
+    ax.legend()
+    ax = axes[1, 0]
+    labels = [c['label'].replace(' ', '\n', 1) for c in d['comparison']]
+    x = np.arange(len(labels))
+    ax.bar(x-.17, [c['landmark_mm'] for c in d['comparison']], width=.34, color=teal, label='All landmarks')
+    ax.bar(x+.17, [c['palm_mm'] for c in d['comparison']], width=.34, color=amber, label='Palm centers')
+    ax.set(xticks=x, xticklabels=labels, title='Same camera frames, different landmark subsets', ylabel='Held-out 3D position RMS [mm]')
+    ax.legend()
+    ax = axes[1, 1]
+    for side, color, label in [(0, teal, 'Left arm'), (1, amber, 'Right arm')]:
+        ax.plot(range(1, 8), np.array(d['true_parameters'])[side, :7], '--', color=color, alpha=.5, label=label+' truth')
+        ax.plot(range(1, 8), np.array(d['estimated_parameters'])[side, :7], 'o', color=color, label=label+' fit')
+    ax.set(title='Recovered encoder offsets (also fits 4 link lengths)', xlabel='Joint index', ylabel='Offset [degrees]')
+    ax.legend(ncol=2, fontsize=9)
+    for ax in axes.flat:
+        ax.grid(alpha=.12)
+    fig.suptitle('Self-observation: head-camera positions calibrate both arm chains', fontsize=18)
+    fig.supxlabel('Synthetic perception • 2 mm lateral / 4 mm depth noise • 15% dropout + 4% outliers • known camera transform • no orientation input', fontsize=9)
+    fig.savefig(ROOT/'results'/'self-observation.png', dpi=160)
+    fig.savefig(ROOT/'results'/'self-observation.pdf')
+    plt.close(fig)
+
+
 def main():
-    data = {'meta': {'model': 'Generic seven-revolute-joint arm; not NEO geometry',
-                     'version': 1, 'units': 'meters, radians internally; mm, degrees in displays',
+    data = {'meta': {'model': 'Generic seven-revolute-joint arm chains; not NEO geometry',
+                     'version': 2, 'primary': 'selfvision', 'units': 'meters, radians internally; mm, degrees in displays',
                      'evaluation': 'Noise-free synthetic truth on 160 unseen joint configurations'}}
-    for key, experiment in [('ghost', ghost), ('redundancy', redundancy),
+    for key, experiment in [('selfvision', self_observation), ('ghost', ghost), ('redundancy', redundancy),
                             ('active', active_selection), ('observability', observability),
                             ('compliance', compliance)]:
         start = time.monotonic()
@@ -76,7 +122,8 @@ def main():
     (ROOT / 'results').mkdir(exist_ok=True)
     (ROOT / 'results' / 'data.json').write_text(json.dumps(data, allow_nan=False, separators=(',', ':')))
     export_plot(data)
-    print('Saved results/data.json, overview.png, and overview.pdf')
+    export_self_observation(data)
+    print('Saved results/data.json, overview reports, and primary self-observation reports')
 
 
 if __name__ == '__main__':

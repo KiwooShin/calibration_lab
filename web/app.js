@@ -1,15 +1,17 @@
 import {ArmScene} from './scene.js';
 import {lineChart,barChart,colors as C,number as fmt} from './charts.js';
+import {renderPerception,updatePerception,perceptionOptions} from './selfvision.js';
 
 const $=id=>document.getElementById(id);
 const META={
+  selfvision:{n:'PRIMARY',topic:'HEAD-CAMERA SELF-OBSERVATION',title:'See your arms. Calibrate the model',subtitle:'Perceived 3D arm and hand positions become constraints on forward kinematics.',scene:'TWO ARMS / HEAD-MOUNTED CAMERA',timeline:'FIT ITERATION'},
   ghost:{n:'01',topic:'PARAMETER ESTIMATION',title:'Fix the ghost arm',subtitle:'Use measured hand poses to teach the model where its joints really are.',scene:'ARM / MODEL ALIGNMENT',timeline:'ITERATION'},
   redundancy:{n:'02',topic:'SEVEN-JOINT REDUNDANCY',title:'Hold the hand. Move the elbow',subtitle:'A stationary hand can reveal a moving model error.',scene:'NULL-SPACE / SELF-MOTION',timeline:'PROGRESS'},
   active:{n:'03',topic:'EXPERIMENTAL DESIGN',title:'Choose the next pose',subtitle:'Every measurement has a cost. Make the next one count.',scene:'WORKSPACE / INFORMATION GAIN',timeline:'POSE BUDGET'},
   observability:{n:'04',topic:'PARAMETER OBSERVABILITY',title:'See the invisible',subtitle:'Some model changes leave no trace in the measurements.',scene:'MEASUREMENTS / WEAK DIRECTIONS',timeline:'PERTURBATION'},
   compliance:{n:'05',topic:'LOAD-DEPENDENT ERRORS',title:'Geometry or arm flex?',subtitle:'A model calibrated without a payload can bend under new evidence.',scene:'PAYLOAD / JOINT DEFLECTION',timeline:'PAYLOAD'}
 };
-let data,view,module='ghost',index=0,playing=false,lastTick=0;
+let data,view,module='selfvision',index=0,playing=false,lastTick=0;
 let ghostView='arm',sweepMode='before',measurement='point',coverage='broad',prediction='rigid',exaggeration=5;
 let pointView='gain';
 const metric=(label,value,unit,detail,accent=false)=>`<div class="metric ${accent?'accent':''}"><div class="label">${label}</div><div class="value">${value}<em>${unit}</em></div><div class="detail">${detail}</div></div>`;
@@ -29,7 +31,10 @@ function render(){
   $('scene-title').textContent=m.scene;$('timeline-label').textContent=m.timeline;
   $('status').textContent='';
   view?.setCloud(null);view?.setPath(null);
+  view?.setMode(module==='selfvision');
+  $('perception-panel').hidden=true;
   $('truth-label').textContent='Physical arm';$('estimate-label').textContent='Predicted arm';
+  if(module==='selfvision')renderPerception(d,{metric,select,update,run:runPerception});
   if(module==='ghost')renderGhost(d);
   if(module==='redundancy')renderRedundancy(d);
   if(module==='active')renderActive(d);
@@ -38,6 +43,16 @@ function render(){
   $('timeline').max=frames().length-1;
   $('timeline').setAttribute('aria-label',`${m.timeline.toLowerCase()} playback`);
   update();
+}
+
+async function runPerception(){
+  const button=$('run-perception');button.disabled=true;button.textContent='Fitting both arm chains…';setPlaying(false);
+  try{
+    const response=await fetch('/api/self-observation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(perceptionOptions())});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||'Calibration failed');
+    data.selfvision=result;
+    if(module==='selfvision'){index=0;render();setPlaying(true);}
+  }catch(error){$('status').textContent=`Could not fit perception observations: ${error.message}`;button.disabled=false;button.textContent='Calibrate from perception ↗';}
 }
 
 function renderGhost(d){
@@ -115,6 +130,7 @@ function update(){
   $('timeline').max=all.length-1;$('timeline').value=index;
   $('frame-label').textContent=`${index} / ${all.length-1}`;
   $('scene-detail').innerHTML='';
+  if(module==='selfvision')updatePerception(d,index,{view,readout,chart});
   if(module==='ghost'){
     view?.update(f,{hideArms:ghostView==='workspace'});
     view?.setCloud(ghostView==='workspace'?d.test_positions:null,f.metrics.per_pose_mm,Math.max(...d.initial.per_pose_mm));
@@ -174,7 +190,7 @@ function update(){
 }
 
 function animation(now){
-  if(data&&playing){const delay=module==='ghost'?700:module==='active'?220:65;if(now-lastTick>=delay){lastTick=now;if(index>=frames().length-1)setPlaying(false);else{index++;update();}}}
+  if(data&&playing){const delay=['ghost','selfvision'].includes(module)?700:module==='active'?220:65;if(now-lastTick>=delay){lastTick=now;if(index>=frames().length-1)setPlaying(false);else{index++;update();}}}
   requestAnimationFrame(animation);
 }
 
@@ -187,7 +203,7 @@ try{
   const response=await fetch('../results/data.json');if(!response.ok)throw new Error('Experiment results are missing. Run python run_experiments.py.');
   data=await response.json();
   try{view=new ArmScene($('viewport'));}catch(error){$('render-error').hidden=false;$('render-error').textContent=`The 3D view needs WebGL. Numerical results and controls are still available. ${error.message}`;}
-  const initial=location.hash.slice(1);switchModule(META[initial]?initial:'ghost');
+  const initial=location.hash.slice(1);switchModule(META[initial]?initial:'selfvision');
   window.calibrationLab={get module(){return module;},get data(){return data;},get index(){return index;},get hasWebGL(){return !!view;}};
   requestAnimationFrame(animation);
 }catch(error){$('status').textContent=error.message;$('play').disabled=true;$('export-data').disabled=true;}

@@ -23,6 +23,25 @@ def check_browser():
         page.wait_for_function('window.calibrationLab && window.calibrationLab.hasWebGL')
         assert page.locator('#viewport canvas').count() == 1
         assert page.locator('.metric').count() == 4
+        assert page.evaluate('window.calibrationLab.module') == 'selfvision'
+        assert page.locator('#camera-overlay svg').count() == 1
+        assert '18 / 18' in page.locator('#metrics').inner_text()
+        page.locator('#observation-frame').fill('8')
+        page.locator('#observation-frame').fill('4')
+        page.locator('#timeline').fill(page.locator('#timeline').get_attribute('max'))
+        page.evaluate('window.scrollTo(0,0)')
+        page.wait_for_timeout(150)
+        page.screenshot(path=str(OUTPUT / '00-self-observation.png'), full_page=True)
+        page.locator('#vision-noise').fill('0')
+        page.locator('#vision-dropout').select_option('0')
+        page.locator('#vision-outliers').select_option('0')
+        page.locator('#run-perception').click()
+        page.wait_for_function('window.calibrationLab.data.selfvision.noise_mm === 0')
+        assert page.evaluate('window.calibrationLab.data.selfvision.final.landmark_mm') < 1e-5
+        page.locator('#timeline').fill('0')
+        page.locator('#show-truth').uncheck()
+        page.locator('#show-truth').check()
+        page.locator('[data-module="ghost"]').click()
         assert page.locator('#chart-one svg').count() == 1
         page.screenshot(path=str(OUTPUT / '01-ghost.png'), full_page=True)
 
@@ -47,7 +66,7 @@ def check_browser():
 
         page.locator('[data-module="redundancy"]').click()
         page.locator('#timeline').fill('65')
-        assert page.locator('.comparison tbody tr').count() == 3
+        assert page.locator('#chart-two .comparison tbody tr').count() == 3
         page.locator('#sweep-mode').select_option('after')
         page.locator('#timeline').fill('70')
         assert 'CALIBRATED PLANNER' in page.locator('#scene-badge').inner_text()
@@ -86,11 +105,18 @@ def check_browser():
         page.wait_for_timeout(200)
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.screenshot(path=str(OUTPUT / '06-mobile.png'), full_page=True)
+        page.locator('[data-module="selfvision"]').click()
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.evaluate('window.scrollTo(0,0)')
+        page.wait_for_timeout(150)
+        page.screenshot(path=str(OUTPUT / '07-self-observation-mobile.png'), full_page=True)
         for body in [{'count': -1}, {'noise_mm': 100}, {'spread': 'invalid'}, []]:
             assert page.request.post('http://127.0.0.1:8765/api/ghost', data=body).status == 400
+        for body in [{'count': 2}, {'group': 'unknown'}, {'dropout': .9}]:
+            assert page.request.post('http://127.0.0.1:8765/api/self-observation', data=body).status == 400
         assert not errors, errors
         browser.close()
-        print('Browser checks passed: five modules, live calibration, exports, WebGL, mobile layout, API validation.')
+        print('Browser checks passed: primary head-camera workflow + five supporting modules, two live fits, exports, WebGL, mobile layout, API validation.')
 
 
 if __name__ == '__main__':

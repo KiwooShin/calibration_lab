@@ -4,27 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0c111b">
-  <title>Calibration Lab · Seven joints, five experiments</title>
+  <title>Calibration Lab · Head-camera self-observation</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="./" aria-label="Calibration Lab home"><span class="brand-mark">⌘</span><span>calibration<span class="brand-sub">RESEARCH LAB / 01</span></span></a>
-    <div class="nav-caption">THE EXPERIMENTS <span>05</span></div>
+    <div class="nav-caption">SELF-CALIBRATION <span>LAB</span></div>
     <nav aria-label="Calibration experiments">
-      <button class="nav-item active" data-module="ghost"><span class="nav-number">01</span><span>Fix the ghost arm<small>Parameter estimation</small></span><span class="nav-dot"></span></button>
+      <button class="nav-item active" data-module="selfvision"><span class="nav-number">◎</span><span>See your own arms<small>Head-camera perception · primary</small></span><span class="nav-dot"></span></button>
+      <button class="nav-item" data-module="ghost"><span class="nav-number">01</span><span>Fix the ghost arm<small>Supporting · pose-based fit</small></span><span class="nav-dot"></span></button>
       <button class="nav-item" data-module="redundancy"><span class="nav-number">02</span><span>Hold the hand<small>Seven-joint redundancy</small></span><span class="nav-dot"></span></button>
       <button class="nav-item" data-module="active"><span class="nav-number">03</span><span>Choose the next pose<small>Experimental design</small></span><span class="nav-dot"></span></button>
       <button class="nav-item" data-module="observability"><span class="nav-number">04</span><span>See the invisible<small>Parameter observability</small></span><span class="nav-dot"></span></button>
       <button class="nav-item" data-module="compliance"><span class="nav-number">05</span><span>Geometry or flex?<small>Load-dependent errors</small></span><span class="nav-dot"></span></button>
     </nav>
-    <div class="sidebar-note"><span class="live-dot"></span> SYNTHETIC BENCH<br><p>One arm. Two models.<br>A better understanding.</p><div class="micro-rule"></div><span>7 revolute joints<br>Known camera + base frames<br>160 held-out configurations</span></div>
-    <a class="sidebar-link" href="../results/overview.pdf" target="_blank" rel="noopener">Open experiment report <span>↗</span></a>
+    <div class="sidebar-note"><span class="live-dot"></span> SELF-OBSERVATION BENCH<br><p>See the landmarks.<br>Calibrate the chain.</p><div class="micro-rule"></div><span>Two arms · 7 joints each<br>Known head-camera transform<br>3D positions, not hand poses</span></div>
+    <a class="sidebar-link" href="../results/self-observation.pdf" target="_blank" rel="noopener">Open perception report <span>↗</span></a>
   </aside>
   <main>
     <header class="topbar"><span>ROBOTICS <span class="slash">/</span> KINEMATIC CALIBRATION</span><span class="tag">LOCAL · REPRODUCIBLE</span></header>
-    <section class="intro"><div><div class="eyebrow" id="eyebrow">EXPERIMENT 01 / PARAMETER ESTIMATION</div><h1 id="title">Fix the ghost arm<span>.</span></h1><p id="subtitle">Use measured hand poses to teach the model where its joints really are.</p></div><button id="export-data" class="secondary">Export data <span>↓</span></button></section>
+    <section class="intro"><div><div class="eyebrow" id="eyebrow">PRIMARY / HEAD-CAMERA SELF-OBSERVATION</div><h1 id="title">See your arms. Calibrate the model<span>.</span></h1><p id="subtitle">Perceived 3D arm and hand positions become constraints on forward kinematics.</p></div><button id="export-data" class="secondary">Export data <span>↓</span></button></section>
     <div id="status" role="status" aria-live="polite">Loading numerical experiments…</div>
     <section class="metrics" id="metrics" aria-label="Experiment results"></section>
     <div class="workbench">
@@ -35,6 +36,10 @@
       </section>
       <aside class="control-panel"><div class="panel-heading">EXPERIMENT CONTROLS <span class="small-cross">＋</span></div><div id="controls"></div><div class="frame-readout" id="frame-readout"></div></aside>
     </div>
+    <section id="perception-panel" hidden>
+      <div class="perception-toolbar"><div><span class="eyebrow">THE PERCEPTION INTERFACE</span><h2>What the head camera tells the model</h2></div><label class="truth-toggle"><input id="show-truth" type="checkbox" checked> Show simulation truth in 3D</label></div>
+      <div class="perception-grid"><article class="chart-card"><div class="chart-heading"><h2>Camera-frame landmark overlay</h2><span>SYNTHETIC / POSITION ONLY</span></div><div id="camera-overlay"></div><div class="observation-selector"><label for="observation-frame">Observation frame</label><input type="range" id="observation-frame" min="0" max="39" value="0"><output id="observation-value">1 / 40</output></div><p class="chart-caption">Projection of noisy 3D predictions, not a real RGB image. Missing landmarks are omitted. Gray points are excluded from this fit.</p></article><article class="chart-card"><div class="chart-heading"><h2>Recovered kinematic parameters</h2><span>SIMULATION CHECK</span></div><div id="parameter-table"></div><p class="chart-caption">Ground truth is shown for evaluation only. The optimizer estimates encoder offsets and link lengths from camera-frame positions.</p></article></div>
+    </section>
     <section class="charts"><article class="chart-card"><div class="chart-heading"><h2 id="chart-one-title"></h2><span id="chart-one-unit"></span></div><div id="chart-one"></div><p class="chart-caption" id="chart-one-caption"></p></article><article class="chart-card"><div class="chart-heading"><h2 id="chart-two-title"></h2><span id="chart-two-unit"></span></div><div id="chart-two"></div><p class="chart-caption" id="chart-two-caption"></p></article></section>
     <section class="insight"><span>THE TAKEAWAY</span><p id="takeaway"></p></section>
     <details class="method"><summary>Inside the experiment <span>MODEL, ASSUMPTIONS & VALIDATION ＋</span></summary><div id="method"></div></details>

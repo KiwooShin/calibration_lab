@@ -1,10 +1,11 @@
-"""Local-only dashboard server with one bounded, on-demand calibration endpoint."""
+"""Local-only dashboard server with bounded pose and perception calibration endpoints."""
 import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
 from experiments import ghost
+from self_observation import self_observation
 
 ROOT = Path(__file__).resolve().parent
 
@@ -27,7 +28,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path != '/api/ghost':
+        if self.path not in ('/api/ghost', '/api/self-observation'):
             self.send_json(404, {'error': 'Unknown experiment endpoint'})
             return
         try:
@@ -35,6 +36,21 @@ class Handler(SimpleHTTPRequestHandler):
             if not 0 < size <= 4096:
                 raise ValueError('Invalid request size')
             options = json.loads(self.rfile.read(size))
+            if self.path == '/api/self-observation':
+                count = options.get('count', 40)
+                noise = options.get('noise_mm', 2.)
+                dropout = options.get('dropout', .15)
+                outliers = options.get('outliers', .04)
+                group = options.get('group', 'all')
+                if type(count) is not int or not 24 <= count <= 96:
+                    raise ValueError('Use 24–96 synchronized frames')
+                for value, maximum in [(noise, 8.), (dropout, .4), (outliers, .15)]:
+                    if type(value) not in (int, float) or not 0 <= value <= maximum:
+                        raise ValueError('Invalid perception noise, dropout, or outlier setting')
+                if group not in ('palm', 'hand', 'all'):
+                    raise ValueError('Unknown landmark group')
+                self.send_json(200, self_observation(count, noise, dropout, outliers, group))
+                return
             count = options.get('count', 32)
             noise = options.get('noise_mm', .5)
             spread = options.get('spread', 'diverse')
