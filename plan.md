@@ -32,6 +32,7 @@ Use a head-mounted camera's labeled 3D arm and hand position predictions to cali
 - [x] Test numerical behavior, input handling, browser controls, and mobile rendering.
 - [x] Document the model assumptions and Mac launch workflow.
 - [x] Restart the local app and deliver the replacement to the GitHub repository.
+- [x] Add a static homepage build with the actual Python/SciPy solver running in a browser worker, including data import, regeneration, and model export.
 
 ## Verified implementation
 

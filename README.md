@@ -8,7 +8,30 @@ The previous collection of mini-projects has been replaced. There is one workflo
 
 ![The Compare stage: perceived landmarks, FK predictions, and their discrepancies](docs/preview.png)
 
-## Run on a Mac
+## Open directly in your browser
+
+**[Launch the interactive lab](https://kiwooshin.github.io/calibration-lab/)** — no installation or local server.
+
+The example loads immediately from an exported result. Pressing **Calibrate model**,
+changing synthetic observations, or importing a JSON dataset runs the actual
+Python/SciPy solver in your browser, using a background Web Worker. Imported
+observations stay in the browser and are not uploaded to a calibration server.
+First use downloads the pinned [Pyodide](https://pyodide.org/en/stable/usage/index.html)
+runtime and NumPy/SciPy from jsDelivr; an internet connection is needed. Later fits
+reuse the loaded runtime. Use a current browser with WebAssembly and WebGL support.
+
+To export the static site for hosting (maintainers only):
+
+```bash
+python build_static.py --output artifacts/site
+```
+
+Publish the contents to any static web host. The generated `demo.json` is the
+initial example; `python-sources.json` contains the same calibration code used by
+the local server. Pyodide 314.0.2 supplies SciPy 1.18.0, including accepted-iteration
+callbacks. Opening the HTML via `file://` is not supported; use the hosted link.
+
+## Run on a Mac (optional)
 
 Python 3.11 or newer is required.
 
@@ -40,7 +63,7 @@ Leave that terminal open and visit the same localhost URL. Choose either local e
 3. **Calibrate:** the solver fits a shared model using training observations. Replay actual accepted optimizer iterations. Changing the model iteration leaves the recorded joint readings, perception positions, and camera transforms fixed.
 4. **Validate:** only held-out frames are available on the observation slider. Compare iteration 0 with the final iteration. These observations never enter the fitting objective.
 
-The observation-frame and model-iteration sliders are independent. The initial demo is fitted when the server starts; selecting Calibrate from Compare runs the solver again. Directly selecting the Calibrate stage replays the current result.
+The observation-frame and model-iteration sliders are independent. The initial demo is fitted at static export time or when the local server starts; selecting Calibrate from Compare runs the solver again. Directly selecting the Calibrate stage replays the current result.
 
 The camera panel projects 3D positions into an image plane. It is **not a real RGB image**, and this repository does not include a trained perception model. The synthetic source emulates the assumed perception interface. Import your actual 3D predictions after adapting the generic geometry and landmark definitions to your robot.
 
@@ -91,6 +114,17 @@ python -m calibration --output artifacts/demo.json
 Generated data and screenshots go in `artifacts/` and are ignored by Git.
 
 ## Checks
+
+For the static site, serve an export and run:
+
+```bash
+python tests/static_browser_smoke.py --url http://localhost:8000/
+# On hosts requiring headed WebGL: xvfb-run -a python tests/static_browser_smoke.py --headed --url http://localhost:8000/
+```
+
+This optional Playwright check runs the actual browser solver and compares its
+held-out residual to native Python, imports and exports data, exercises invalid
+input and regeneration, and checks mobile layout and the absence of API requests.
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q

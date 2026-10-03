@@ -1,4 +1,5 @@
 import {RobotView} from './scene.js';
+import {compute} from './compute.js';
 import {C,fmt,esc,cameraPoint,cameraView,residualView,lineChart} from './plots.js';
 
 const $=id=>document.getElementById(id);
@@ -47,8 +48,7 @@ function accept(data){
 async function fitRequest(path,payload,replaceDataset=false){
   stop();setBusy(true,'Fitting a shared model to the training frames. Validation frames are excluded…');
   try{
-    const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data=await response.json();if(!response.ok)throw new Error(data.error||'Calibration failed');
+    const data=await compute(path,payload,message=>$('status').textContent=message);
     if(replaceDataset)imported=path==='/api/calibrate'?payload:null;
     accept(data);chooseStage(2);play();
   }catch(error){setBusy(false,`Could not calibrate: ${error.message}`);}
@@ -112,8 +112,7 @@ $('export-button').onclick=()=>{
 };
 setBusy(true,'Loading the calibration experiment…');
 try{
-  const response=await fetch('/api/demo');if(!response.ok)throw new Error('Start the app with python server.py');
-  const data=await response.json();
+  const data=await compute('/api/demo');
   try{renderer=new RobotView($('robot-view'));}catch(error){$('webgl-error').hidden=false;$('webgl-error').textContent='WebGL could not start. The camera projection, residual inspector, calibration controls, and metrics still work.';}
   accept(data);
   window.calibrationApp={get result(){return result;},get stage(){return stage;},get iteration(){return iteration;},get sampleIndex(){return sampleIndex;},get hasWebGL(){return !!renderer;},get busy(){return busy;}};
