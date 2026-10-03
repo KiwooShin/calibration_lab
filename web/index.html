@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0c111b">
+  <title>Calibration Lab · Seven joints, five experiments</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="./" aria-label="Calibration Lab home"><span class="brand-mark">⌘</span><span>calibration<span class="brand-sub">RESEARCH LAB / 01</span></span></a>
+    <div class="nav-caption">THE EXPERIMENTS <span>05</span></div>
+    <nav aria-label="Calibration experiments">
+      <button class="nav-item active" data-module="ghost"><span class="nav-number">01</span><span>Fix the ghost arm<small>Parameter estimation</small></span><span class="nav-dot"></span></button>
+      <button class="nav-item" data-module="redundancy"><span class="nav-number">02</span><span>Hold the hand<small>Seven-joint redundancy</small></span><span class="nav-dot"></span></button>
+      <button class="nav-item" data-module="active"><span class="nav-number">03</span><span>Choose the next pose<small>Experimental design</small></span><span class="nav-dot"></span></button>
+      <button class="nav-item" data-module="observability"><span class="nav-number">04</span><span>See the invisible<small>Parameter observability</small></span><span class="nav-dot"></span></button>
+      <button class="nav-item" data-module="compliance"><span class="nav-number">05</span><span>Geometry or flex?<small>Load-dependent errors</small></span><span class="nav-dot"></span></button>
+    </nav>
+    <div class="sidebar-note"><span class="live-dot"></span> SYNTHETIC BENCH<br><p>One arm. Two models.<br>A better understanding.</p><div class="micro-rule"></div><span>7 revolute joints<br>Known camera + base frames<br>160 held-out configurations</span></div>
+    <a class="sidebar-link" href="../results/overview.pdf" target="_blank" rel="noopener">Open experiment report <span>↗</span></a>
+  </aside>
+  <main>
+    <header class="topbar"><span>ROBOTICS <span class="slash">/</span> KINEMATIC CALIBRATION</span><span class="tag">LOCAL · REPRODUCIBLE</span></header>
+    <section class="intro"><div><div class="eyebrow" id="eyebrow">EXPERIMENT 01 / PARAMETER ESTIMATION</div><h1 id="title">Fix the ghost arm<span>.</span></h1><p id="subtitle">Use measured hand poses to teach the model where its joints really are.</p></div><button id="export-data" class="secondary">Export data <span>↓</span></button></section>
+    <div id="status" role="status" aria-live="polite">Loading numerical experiments…</div>
+    <section class="metrics" id="metrics" aria-label="Experiment results"></section>
+    <div class="workbench">
+      <section class="viewport-panel">
+        <div class="panel-heading"><span><span class="live-dot"></span> <span id="scene-title">ARM / MODEL ALIGNMENT</span></span><div class="scene-actions"><button id="reset-view" title="Reset camera">Reset view</button><button id="snapshot" title="Download the 3D view as PNG">PNG ↗</button></div></div>
+        <div id="viewport" aria-label="Interactive three-dimensional robot arm. Drag to orbit, scroll to zoom."><div class="view-label">WORLD FRAME <span>XYZ / METERS</span></div><div id="scene-badge" class="scene-badge">POSE OBSERVATION</div><div id="scene-detail"></div><div class="scene-legend"><span><i class="swatch cyan"></i><span id="truth-label">Physical arm</span></span><span><i class="swatch amber"></i><span id="estimate-label">Predicted arm</span></span></div><div class="orbit-hint">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM</div><div id="render-error" hidden></div></div>
+        <div class="transport"><button id="play" aria-label="Play experiment animation">▶</button><label for="timeline" id="timeline-label">ITERATION</label><input id="timeline" type="range" min="0" max="5" value="0" aria-label="Animation frame"><output id="frame-label">0 / 5</output></div>
+      </section>
+      <aside class="control-panel"><div class="panel-heading">EXPERIMENT CONTROLS <span class="small-cross">＋</span></div><div id="controls"></div><div class="frame-readout" id="frame-readout"></div></aside>
+    </div>
+    <section class="charts"><article class="chart-card"><div class="chart-heading"><h2 id="chart-one-title"></h2><span id="chart-one-unit"></span></div><div id="chart-one"></div><p class="chart-caption" id="chart-one-caption"></p></article><article class="chart-card"><div class="chart-heading"><h2 id="chart-two-title"></h2><span id="chart-two-unit"></span></div><div id="chart-two"></div><p class="chart-caption" id="chart-two-caption"></p></article></section>
+    <section class="insight"><span>THE TAKEAWAY</span><p id="takeaway"></p></section>
+    <details class="method"><summary>Inside the experiment <span>MODEL, ASSUMPTIONS & VALIDATION ＋</span></summary><div id="method"></div></details>
+    <footer><span>CALIBRATION LAB <b>©</b> EDUCATIONAL SIMULATION</span><span>Generic geometry. No claims about 1X NEO hardware.</span></footer>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
